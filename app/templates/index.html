@@ -696,11 +696,11 @@
         _accounts.map(a => `<option value="${a.id}" ${p.account_id == a.id ? 'selected' : ''}>${esc(a.email)}</option>`).join('');
 
       return `
-      <div class="card" draggable="true" data-id="${p.id}"
-           ondragstart="onDragStart(event)" ondragover="onDragOver(event)"
-           ondragleave="onDragLeave(event)" ondrop="onDrop(event)" ondragend="onDragEnd(event)">
+      <div class="card" data-id="${p.id}"
+           ondragover="onDragOver(event)"
+           ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
         <div class="card-row">
-          <div class="drag-handle" title="Drag to reorder">&#9776;</div>
+          <div class="drag-handle" title="Drag to reorder" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)">&#9776;</div>
           <div style="flex:1">
             <div class="card-title">${esc(p.name)}</div>
             <div class="card-meta">Created ${fmtDate(p.created_at)}</div>
@@ -855,8 +855,9 @@
 
   // ---- Drag to reorder ----
   function onDragStart(e) {
-    _dragSrcId = parseInt(e.currentTarget.dataset.id);
-    e.currentTarget.classList.add('dragging');
+    const card = e.currentTarget.closest('.card');
+    _dragSrcId = parseInt(card.dataset.id);
+    card.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
   }
 
