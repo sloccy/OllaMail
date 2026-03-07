@@ -7,7 +7,7 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS
+from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS, EMAIL_BODY_TRUNCATION
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
@@ -106,7 +106,7 @@ def fetch_recent_emails(service, max_results=GMAIL_MAX_RESULTS, lookback_hours=G
             "subject": headers.get("Subject", "(no subject)"),
             "sender": headers.get("From", "unknown"),
             "snippet": full.get("snippet", ""),
-            "body": body[:3000],
+            "body": body[:EMAIL_BODY_TRUNCATION],
         })
     return emails
 
