@@ -281,6 +281,22 @@ def api_generate_prompt():
         return jsonify({"error": "Generation failed. Check Ollama is running."}), 500
 
 
+# ---- Account Gmail labels ----
+
+@app.route("/api/accounts/<int:account_id>/labels", methods=["GET"])
+def api_list_account_labels(account_id):
+    account = db.get_account(account_id)
+    if not account:
+        return jsonify({"error": "Not found"}), 404
+    try:
+        service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+        if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
+            db.update_account_credentials(account_id, refreshed_creds)
+        return jsonify(gmail_client.list_labels(service))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ---- Retention ----
 
 @app.route("/api/retention/<int:account_id>", methods=["GET"])

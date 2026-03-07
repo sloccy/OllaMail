@@ -142,6 +142,14 @@ def trash_email(service, message_id: str):
     ).execute()
 
 
+def list_labels(service) -> list:
+    result = service.users().labels().list(userId="me").execute()
+    return sorted(
+        [{"id": l["id"], "name": l["name"]} for l in result.get("labels", [])],
+        key=lambda x: x["name"].lower(),
+    )
+
+
 def fetch_emails_older_than(service, days: int, label_name: str = None) -> list:
     """Return message IDs older than `days` days, optionally filtered by label."""
     cutoff = datetime.date.today() - datetime.timedelta(days=days)
