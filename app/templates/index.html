@@ -490,6 +490,23 @@
           </div>
         </div>
 
+        <!-- Never delete -->
+        <div class="card" style="margin-bottom:20px;">
+          <div class="form-title">Never Delete</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">Emails with these labels will never be deleted by any retention rule.</div>
+          <div id="label-exemptions-list"></div>
+          <hr class="divider">
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+            <div class="form-group" style="margin:0;flex:1;min-width:180px;">
+              <label for="new-exemption-label">Gmail label</label>
+              <select id="new-exemption-label">
+                <option value="">Select a label…</option>
+              </select>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="margin-bottom:0;flex-shrink:0;align-self:flex-end;" onclick="addExemption()">Never Delete</button>
+          </div>
+        </div>
+
         <!-- Label rules -->
         <div class="card">
           <div class="form-title">Label-Specific Retention</div>
@@ -1192,7 +1209,8 @@
       globalUnit.value = 'days';
     }
 
-    renderLabelRetentionList(data.labels, accountId);
+    renderExemptionsList(data.exemptions || [], accountId);
+    renderLabelRetentionList(data.labels, accountId, data.exemptions || []);
   }
 
   function toggleGlobalDaysInput() {
@@ -1222,19 +1240,43 @@
     else { const e = await r.json(); toast(e.error || 'Error', 'error'); }
   }
 
-  function populateLabelDropdown(existingRules) {
-    const taken = new Set(existingRules.map(r => r.label_name.toLowerCase()));
-    const available = _retentionLabels.filter(l => !taken.has(l.name.toLowerCase()));
+  function populateLabelDropdown(existingRules, exemptions) {
+    const takenByRule = new Set(existingRules.map(r => r.label_name.toLowerCase()));
+    const takenByExempt = new Set((exemptions || []).map(e => e.label_name.toLowerCase()));
+    const available = _retentionLabels.filter(l => !takenByRule.has(l.name.toLowerCase()) && !takenByExempt.has(l.name.toLowerCase()));
     const sel = document.getElementById('new-retention-label');
-    if (!available.length) {
-      sel.innerHTML = '<option value="">All labels have rules</option>';
+    sel.innerHTML = available.length
+      ? '<option value="">Select a label…</option>' + available.map(l => `<option value="${esc(l.name)}">${esc(l.name)}</option>`).join('')
+      : '<option value="">No labels available</option>';
+  }
+
+  function populateExemptionDropdown(exemptions, existingRules) {
+    const takenByExempt = new Set((exemptions || []).map(e => e.label_name.toLowerCase()));
+    const takenByRule = new Set(existingRules.map(r => r.label_name.toLowerCase()));
+    const available = _retentionLabels.filter(l => !takenByExempt.has(l.name.toLowerCase()) && !takenByRule.has(l.name.toLowerCase()));
+    const sel = document.getElementById('new-exemption-label');
+    sel.innerHTML = available.length
+      ? '<option value="">Select a label…</option>' + available.map(l => `<option value="${esc(l.name)}">${esc(l.name)}</option>`).join('')
+      : '<option value="">No labels available</option>';
+  }
+
+  function renderExemptionsList(exemptions, accountId) {
+    const el = document.getElementById('label-exemptions-list');
+    if (!exemptions.length) {
+      el.innerHTML = '<div class="empty" style="padding:16px 0 6px;"><div class="empty-icon" style="font-size:20px;">&#9673;</div>No exemptions yet.</div>';
     } else {
-      sel.innerHTML = '<option value="">Select a label…</option>' +
-        available.map(l => `<option value="${esc(l.name)}">${esc(l.name)}</option>`).join('');
+      el.innerHTML = exemptions.map(e => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div>
+            <span class="tag">${esc(e.label_name)}</span>
+            <span style="font-size:13px;color:var(--muted);margin-left:10px;">never deleted</span>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="deleteExemption(${accountId}, ${e.id})">Remove</button>
+        </div>`).join('');
     }
   }
 
-  function renderLabelRetentionList(labels, accountId) {
+  function renderLabelRetentionList(labels, accountId, exemptions) {
     const el = document.getElementById('label-retention-list');
     if (!labels.length) {
       el.innerHTML = '<div class="empty" style="padding:20px 0 10px;"><div class="empty-icon" style="font-size:20px;">&#9673;</div>No label rules yet.</div>';
@@ -1248,7 +1290,27 @@
           <button class="btn btn-danger btn-sm" onclick="deleteLabelRetention(${accountId}, ${r.id})">Remove</button>
         </div>`).join('');
     }
-    populateLabelDropdown(labels);
+    populateLabelDropdown(labels, exemptions);
+    populateExemptionDropdown(exemptions, labels);
+  }
+
+  async function addExemption() {
+    const accountId = document.getElementById('retention-account-select').value;
+    if (!accountId) return;
+    const label = document.getElementById('new-exemption-label').value;
+    if (!label) { toast('Select a label.', 'error'); return; }
+    const r = await fetch(`/api/retention/${accountId}/exemptions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label_name: label }),
+    });
+    if (r.ok) { toast(`"${label}" will never be deleted.`); loadRetention(); }
+    else { const e = await r.json(); toast(e.error || 'Error', 'error'); }
+  }
+
+  async function deleteExemption(accountId, exemptionId) {
+    const r = await fetch(`/api/retention/${accountId}/exemptions/${exemptionId}`, { method: 'DELETE' });
+    if (r.ok) { toast('Exemption removed.'); loadRetention(); }
+    else { toast('Error removing exemption.', 'error'); }
   }
 
   async function addLabelRetention() {
