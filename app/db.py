@@ -97,6 +97,13 @@ def init_db():
                 UNIQUE(account_id, label_name)
             );
 
+            CREATE TABLE IF NOT EXISTS label_exemptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER NOT NULL,
+                label_name TEXT NOT NULL,
+                UNIQUE(account_id, label_name)
+            );
+
             -- Create indexes for better performance
             CREATE INDEX IF NOT EXISTS idx_processed_emails_account_id ON processed_emails(account_id);
             CREATE INDEX IF NOT EXISTS idx_processed_emails_message_id ON processed_emails(message_id);
@@ -130,6 +137,7 @@ def _migrate():
         "ALTER TABLE prompts ADD COLUMN account_id INTEGER DEFAULT NULL",
         "CREATE TABLE IF NOT EXISTS account_retention (account_id INTEGER PRIMARY KEY, global_days INTEGER)",
         "CREATE TABLE IF NOT EXISTS label_retention (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER NOT NULL, label_name TEXT NOT NULL, days INTEGER NOT NULL, UNIQUE(account_id, label_name))",
+        "CREATE TABLE IF NOT EXISTS label_exemptions (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER NOT NULL, label_name TEXT NOT NULL, UNIQUE(account_id, label_name))",
     ]
     with get_db() as conn:
         for sql in migrations:
@@ -346,9 +354,14 @@ def get_retention(account_id):
             "SELECT id, label_name, days FROM label_retention WHERE account_id = ? ORDER BY id ASC",
             (account_id,),
         ).fetchall()
+        exemptions = conn.execute(
+            "SELECT id, label_name FROM label_exemptions WHERE account_id = ? ORDER BY label_name ASC",
+            (account_id,),
+        ).fetchall()
     return {
         "global_days": row["global_days"] if row else None,
         "labels": [dict(r) for r in labels],
+        "exemptions": [dict(r) for r in exemptions],
     }
 
 
@@ -376,6 +389,19 @@ def add_label_retention(account_id, label_name, days):
 def delete_label_retention(rule_id):
     with get_db() as conn:
         conn.execute("DELETE FROM label_retention WHERE id = ?", (rule_id,))
+
+
+def add_label_exemption(account_id, label_name):
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO label_exemptions (account_id, label_name) VALUES (?, ?)",
+            (account_id, label_name),
+        )
+
+
+def delete_label_exemption(exemption_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM label_exemptions WHERE id = ?", (exemption_id,))
 
 
 def get_categorization_history(account_id=None, prompt_id=None,

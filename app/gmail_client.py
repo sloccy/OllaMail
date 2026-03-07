@@ -150,12 +150,15 @@ def list_labels(service) -> list:
     )
 
 
-def fetch_emails_older_than(service, days: int, label_name: str = None) -> list:
+def fetch_emails_older_than(service, days: int, label_name: str = None, excluded_labels: list = None) -> list:
     """Return message IDs older than `days` days, optionally filtered by label."""
     cutoff = datetime.date.today() - datetime.timedelta(days=days)
     query = f"before:{cutoff.strftime('%Y/%m/%d')}"
     if label_name:
         query += f" label:{label_name}"
+    if excluded_labels:
+        for lbl in excluded_labels:
+            query += f" -label:{lbl}"
     ids = []
     page_token = None
     while True:

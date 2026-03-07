@@ -348,6 +348,26 @@ def api_delete_label_retention(account_id, rule_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/retention/<int:account_id>/exemptions", methods=["POST"])
+def api_add_exemption(account_id):
+    if not db.get_account(account_id):
+        return jsonify({"error": "Not found"}), 404
+    data = request.json
+    if data is None:
+        return jsonify({"error": "JSON body required."}), 400
+    label_name = (data.get("label_name") or "").strip()
+    if not label_name:
+        return jsonify({"error": "label_name is required"}), 400
+    db.add_label_exemption(account_id, label_name)
+    return jsonify({"ok": True}), 201
+
+
+@app.route("/api/retention/<int:account_id>/exemptions/<int:exemption_id>", methods=["DELETE"])
+def api_delete_exemption(account_id, exemption_id):
+    db.delete_label_exemption(exemption_id)
+    return jsonify({"ok": True})
+
+
 # ---- History ----
 
 @app.route("/api/history", methods=["GET"])

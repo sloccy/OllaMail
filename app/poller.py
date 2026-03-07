@@ -167,8 +167,12 @@ def _cleanup_retention(account, service):
         retention = db.get_retention(account_id)
         trashed_ids = set()
 
-        # Per-label rules first (more specific, typically shorter retention)
+        exempt_names = {e["label_name"].lower() for e in retention.get("exemptions", [])}
+
+        # Per-label rules — skip any label that is fully exempted
         for rule in retention["labels"]:
+            if rule["label_name"].lower() in exempt_names:
+                continue
             ids = gmail_client.fetch_emails_older_than(service, rule["days"], rule["label_name"])
             newly_trashed = 0
             for msg_id in ids:
@@ -179,9 +183,10 @@ def _cleanup_retention(account, service):
             if newly_trashed:
                 db.add_log("INFO", f"[{email_addr}] Retention: trashed {newly_trashed} email(s) with label '{rule['label_name']}' older than {rule['days']} day(s).")
 
-        # Global rule (skip already-trashed)
+        # Global rule — exclude labels with their own rule AND exempted labels
         if retention["global_days"]:
-            ids = gmail_client.fetch_emails_older_than(service, retention["global_days"])
+            excluded = [rule["label_name"] for rule in retention["labels"]] + list(exempt_names)
+            ids = gmail_client.fetch_emails_older_than(service, retention["global_days"], excluded_labels=excluded)
             new_ids = [i for i in ids if i not in trashed_ids]
             for msg_id in new_ids:
                 gmail_client.trash_email(service, msg_id)
