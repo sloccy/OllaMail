@@ -478,8 +478,11 @@
             </div>
             <div class="setting-control" style="display:flex;align-items:center;gap:10px;">
               <input type="checkbox" id="retention-global-enabled" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;" onchange="toggleGlobalDaysInput()">
-              <input type="number" id="retention-global-days" min="1" step="1" placeholder="days" style="width:90px;text-align:right;" disabled>
-              <span style="font-size:13px;color:var(--muted);">days</span>
+              <input type="number" id="retention-global-value" min="1" step="1" placeholder="1" style="width:70px;text-align:right;" disabled>
+              <select id="retention-global-unit" style="width:90px;" disabled>
+                <option value="days">days</option>
+                <option value="years">years</option>
+              </select>
             </div>
           </div>
           <div style="margin-top:14px;">
@@ -493,15 +496,24 @@
           <div id="label-retention-list"></div>
           <hr class="divider">
           <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-            <div class="form-group" style="margin:0;flex:1;min-width:160px;">
-              <label for="new-retention-label">Gmail label name</label>
-              <input type="text" id="new-retention-label" placeholder="e.g. Newsletter">
+            <div class="form-group" style="margin:0;flex:1;min-width:180px;">
+              <label for="new-retention-label">Gmail label</label>
+              <select id="new-retention-label">
+                <option value="">Select a label…</option>
+              </select>
             </div>
-            <div class="form-group" style="margin:0;width:120px;">
-              <label for="new-retention-days">Delete after (days)</label>
-              <input type="number" id="new-retention-days" min="1" step="1" placeholder="30">
+            <div class="form-group" style="margin:0;width:80px;">
+              <label for="new-retention-value">Delete after</label>
+              <input type="number" id="new-retention-value" min="1" step="1" placeholder="1">
             </div>
-            <button class="btn btn-primary btn-sm" style="margin-bottom:0;flex-shrink:0;" onclick="addLabelRetention()">Add Rule</button>
+            <div class="form-group" style="margin:0;width:100px;">
+              <label>&nbsp;</label>
+              <select id="new-retention-unit">
+                <option value="days">days</option>
+                <option value="years">years</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-sm" style="margin-bottom:0;flex-shrink:0;align-self:flex-end;" onclick="addLabelRetention()">Add Rule</button>
           </div>
         </div>
       </div>
@@ -521,6 +533,7 @@
   let _accounts = [];
   let _authUrl = null;
   let _dragSrcId = null;
+  let _retentionLabels = [];
 
   // ---- Navigation ----
   function navigate(page, el) {
@@ -1135,6 +1148,19 @@
     }
   }
 
+  function daysToDisplay(days) {
+    if (days >= 365 && days % 365 === 0) return { value: days / 365, unit: 'years' };
+    return { value: days, unit: 'days' };
+  }
+  function displayToDays(value, unit) {
+    return unit === 'years' ? value * 365 : value;
+  }
+  function fmtRetentionDays(days) {
+    const { value, unit } = daysToDisplay(days);
+    if (unit === 'years') return `${value} ${value === 1 ? 'year' : 'years'}`;
+    return `${value} ${value === 1 ? 'day' : 'days'}`;
+  }
+
   async function loadRetention() {
     const accountId = document.getElementById('retention-account-select').value;
     if (!accountId) {
@@ -1142,18 +1168,28 @@
       return;
     }
     document.getElementById('retention-content').style.display = 'block';
-    const data = await fetch(`/api/retention/${accountId}`).then(r => r.json());
+    const [data, gmailLabels] = await Promise.all([
+      fetch(`/api/retention/${accountId}`).then(r => r.json()),
+      fetch(`/api/accounts/${accountId}/labels`).then(r => r.json()).catch(() => []),
+    ]);
+    _retentionLabels = Array.isArray(gmailLabels) ? gmailLabels : [];
 
     const globalEnabled = document.getElementById('retention-global-enabled');
-    const globalDays = document.getElementById('retention-global-days');
+    const globalValue = document.getElementById('retention-global-value');
+    const globalUnit = document.getElementById('retention-global-unit');
     if (data.global_days) {
+      const { value, unit } = daysToDisplay(data.global_days);
       globalEnabled.checked = true;
-      globalDays.disabled = false;
-      globalDays.value = data.global_days;
+      globalValue.disabled = false;
+      globalUnit.disabled = false;
+      globalValue.value = value;
+      globalUnit.value = unit;
     } else {
       globalEnabled.checked = false;
-      globalDays.disabled = true;
-      globalDays.value = '';
+      globalValue.disabled = true;
+      globalUnit.disabled = true;
+      globalValue.value = '';
+      globalUnit.value = 'days';
     }
 
     renderLabelRetentionList(data.labels, accountId);
@@ -1161,56 +1197,77 @@
 
   function toggleGlobalDaysInput() {
     const enabled = document.getElementById('retention-global-enabled').checked;
-    document.getElementById('retention-global-days').disabled = !enabled;
-    if (!enabled) document.getElementById('retention-global-days').value = '';
+    document.getElementById('retention-global-value').disabled = !enabled;
+    document.getElementById('retention-global-unit').disabled = !enabled;
+    if (!enabled) {
+      document.getElementById('retention-global-value').value = '';
+      document.getElementById('retention-global-unit').value = 'days';
+    }
   }
 
   async function saveGlobalRetention() {
     const accountId = document.getElementById('retention-account-select').value;
     if (!accountId) return;
     const enabled = document.getElementById('retention-global-enabled').checked;
-    const days = parseInt(document.getElementById('retention-global-days').value, 10);
-    if (enabled && (!days || days < 1)) { toast('Enter a valid number of days.', 'error'); return; }
-    const body = enabled ? { global_days: days } : { global_days: null };
+    const value = parseInt(document.getElementById('retention-global-value').value, 10);
+    const unit = document.getElementById('retention-global-unit').value;
+    if (enabled && (!value || value < 1)) { toast('Enter a valid number.', 'error'); return; }
+    const days = enabled ? displayToDays(value, unit) : null;
+    const body = { global_days: days };
     const r = await fetch(`/api/retention/${accountId}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (r.ok) { toast(enabled ? `Global retention set to ${days} day(s).` : 'Global retention disabled.'); }
+    if (r.ok) { toast(enabled ? `Global retention set to ${fmtRetentionDays(days)}.` : 'Global retention disabled.'); }
     else { const e = await r.json(); toast(e.error || 'Error', 'error'); }
+  }
+
+  function populateLabelDropdown(existingRules) {
+    const taken = new Set(existingRules.map(r => r.label_name.toLowerCase()));
+    const available = _retentionLabels.filter(l => !taken.has(l.name.toLowerCase()));
+    const sel = document.getElementById('new-retention-label');
+    if (!available.length) {
+      sel.innerHTML = '<option value="">All labels have rules</option>';
+    } else {
+      sel.innerHTML = '<option value="">Select a label…</option>' +
+        available.map(l => `<option value="${esc(l.name)}">${esc(l.name)}</option>`).join('');
+    }
   }
 
   function renderLabelRetentionList(labels, accountId) {
     const el = document.getElementById('label-retention-list');
     if (!labels.length) {
       el.innerHTML = '<div class="empty" style="padding:20px 0 10px;"><div class="empty-icon" style="font-size:20px;">&#9673;</div>No label rules yet.</div>';
-      return;
+    } else {
+      el.innerHTML = labels.map(r => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div>
+            <span class="tag">${esc(r.label_name)}</span>
+            <span style="font-size:13px;color:var(--muted);margin-left:10px;">→ trash after <strong style="color:var(--text);">${fmtRetentionDays(r.days)}</strong></span>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="deleteLabelRetention(${accountId}, ${r.id})">Remove</button>
+        </div>`).join('');
     }
-    el.innerHTML = labels.map(r => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
-        <div>
-          <span class="tag">${esc(r.label_name)}</span>
-          <span style="font-size:13px;color:var(--muted);margin-left:10px;">→ trash after <strong style="color:var(--text);">${r.days}</strong> day${r.days === 1 ? '' : 's'}</span>
-        </div>
-        <button class="btn btn-danger btn-sm" onclick="deleteLabelRetention(${accountId}, ${r.id})">Remove</button>
-      </div>`).join('');
+    populateLabelDropdown(labels);
   }
 
   async function addLabelRetention() {
     const accountId = document.getElementById('retention-account-select').value;
     if (!accountId) return;
-    const label = document.getElementById('new-retention-label').value.trim();
-    const days = parseInt(document.getElementById('new-retention-days').value, 10);
-    if (!label) { toast('Enter a label name.', 'error'); return; }
-    if (!days || days < 1) { toast('Enter a valid number of days.', 'error'); return; }
+    const label = document.getElementById('new-retention-label').value;
+    const value = parseInt(document.getElementById('new-retention-value').value, 10);
+    const unit = document.getElementById('new-retention-unit').value;
+    if (!label) { toast('Select a label.', 'error'); return; }
+    if (!value || value < 1) { toast('Enter a valid number.', 'error'); return; }
+    const days = displayToDays(value, unit);
     const r = await fetch(`/api/retention/${accountId}/labels`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ label_name: label, days }),
     });
     if (r.ok) {
-      document.getElementById('new-retention-label').value = '';
-      document.getElementById('new-retention-days').value = '';
-      toast(`Rule added: "${label}" → ${days} day(s).`);
+      document.getElementById('new-retention-value').value = '';
+      document.getElementById('new-retention-unit').value = 'days';
+      toast(`Rule added: "${label}" → ${fmtRetentionDays(days)}.`);
       loadRetention();
     } else { const e = await r.json(); toast(e.error || 'Error', 'error'); }
   }
