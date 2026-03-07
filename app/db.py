@@ -43,7 +43,6 @@ def init_db():
                 created_at TEXT DEFAULT (datetime('now')),
                 action_archive INTEGER DEFAULT 0,
                 action_spam INTEGER DEFAULT 0,
-                action_move_to TEXT DEFAULT '',
                 action_trash INTEGER DEFAULT 0,
                 action_mark_read INTEGER DEFAULT 0,
                 sort_order INTEGER DEFAULT 0,
@@ -129,7 +128,6 @@ def _migrate():
     migrations = [
         "ALTER TABLE prompts ADD COLUMN action_archive INTEGER DEFAULT 0",
         "ALTER TABLE prompts ADD COLUMN action_spam INTEGER DEFAULT 0",
-        "ALTER TABLE prompts ADD COLUMN action_move_to TEXT DEFAULT ''",
         "ALTER TABLE prompts ADD COLUMN action_trash INTEGER DEFAULT 0",
         "ALTER TABLE prompts ADD COLUMN action_mark_read INTEGER DEFAULT 0",
         "ALTER TABLE prompts ADD COLUMN sort_order INTEGER DEFAULT 0",
@@ -143,8 +141,8 @@ def _migrate():
         for sql in migrations:
             try:
                 conn.execute(sql)
-            except Exception:
-                pass
+            except sqlite3.OperationalError:
+                pass  # column/table already exists
     # Seed sort_order for existing rows
     with get_db() as conn:
         conn.execute("UPDATE prompts SET sort_order = id WHERE sort_order = 0")
@@ -209,6 +207,16 @@ def delete_account(account_id):
     with get_db() as conn:
         conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
         conn.execute("DELETE FROM processed_emails WHERE account_id = ?", (account_id,))
+
+
+def toggle_account(account_id):
+    account = get_account(account_id)
+    if not account:
+        return None
+    new_state = 0 if account["active"] else 1
+    with get_db() as conn:
+        conn.execute("UPDATE accounts SET active=? WHERE id=?", (new_state, account_id))
+    return new_state
 
 
 # ---- Prompts ----
@@ -421,9 +429,9 @@ def get_categorization_history(account_id=None, prompt_id=None,
         wheres.append("sender LIKE ?")
         params.append(f"%{sender}%")
     params.append(limit)
-    where_clause = ("WHERE " + " AND ".join(wheres)) if wheres else ""
+    sql = "SELECT * FROM categorization_history"
+    if wheres:
+        sql += " WHERE " + " AND ".join(wheres)
+    sql += " ORDER BY id DESC LIMIT ?"
     with get_db() as conn:
-        return [dict(r) for r in conn.execute(
-            f"SELECT * FROM categorization_history {where_clause} ORDER BY id DESC LIMIT ?",
-            params
-        ).fetchall()]
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]

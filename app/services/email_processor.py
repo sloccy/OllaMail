@@ -1,0 +1,96 @@
+import json
+from app import db, gmail_client
+from app.llm.base import LLMProvider
+from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS
+
+
+def process_account(account: dict, prompts: list, provider: LLMProvider):
+    """Fetch new emails for an account, classify them, and apply labels/actions.
+    Always returns the Gmail service object so the caller can run retention cleanup."""
+    account_id = account["id"]
+    email_addr = account["email"]
+
+    service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+    if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
+        db.update_account_credentials(account_id, refreshed_creds)
+
+    emails = gmail_client.fetch_recent_emails(
+        service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
+    )
+    new_emails = [e for e in emails if not db.is_processed(account_id, e["id"])]
+
+    if not new_emails:
+        db.add_log("INFO", f"[{email_addr}] No new emails to process.")
+        db.update_last_scan(account_id)
+        return service
+
+    db.add_log("INFO", f"[{email_addr}] Processing {len(new_emails)} new email(s) against {len(prompts)} rule(s).")
+
+    unique_labels = list({p["label_name"] for p in prompts})
+    label_cache = gmail_client.build_label_cache(service, unique_labels)
+
+    for email in new_emails:
+        _process_email(email, account_id, email_addr, prompts, label_cache, service, provider)
+
+    db.update_last_scan(account_id)
+    return service
+
+
+def _process_email(email: dict, account_id: int, email_addr: str,
+                   prompts: list, label_cache: dict, service, provider: LLMProvider) -> None:
+    try:
+        email_results = provider.classify_email_batch(email, prompts)
+        stop = False
+
+        for prompt in prompts:
+            if stop:
+                break
+            should_label = email_results.get(prompt["id"], False)
+
+            if should_label:
+                gmail_client.apply_label(service, email["id"], label_cache[prompt["label_name"]])
+                actions_taken = [f"labeled → {prompt['label_name']}"]
+
+                if prompt.get("action_spam"):
+                    gmail_client.spam_email(service, email["id"])
+                    actions_taken.append("sent to spam")
+                elif prompt.get("action_trash"):
+                    gmail_client.trash_email(service, email["id"])
+                    actions_taken.append("trashed")
+                elif prompt.get("action_archive"):
+                    gmail_client.archive_email(service, email["id"])
+                    actions_taken.append("archived")
+
+                if prompt.get("action_mark_read"):
+                    gmail_client.mark_email_read(service, email["id"])
+                    actions_taken.append("marked as read")
+
+                if prompt.get("stop_processing"):
+                    actions_taken.append("stopped further rules")
+                    stop = True
+
+                db.add_log(
+                    "INFO",
+                    f"[{email_addr}] '{email['subject'][:60]}' — {', '.join(actions_taken)} (rule: {prompt['name']})",
+                )
+                db.add_categorization(
+                    account_id=account_id,
+                    account_email=email_addr,
+                    message_id=email["id"],
+                    subject=email.get("subject", ""),
+                    sender=email.get("sender", ""),
+                    prompt_id=prompt["id"],
+                    prompt_name=prompt["name"],
+                    label_name=prompt["label_name"],
+                    actions=", ".join(actions_taken),
+                )
+            else:
+                db.add_log(
+                    "DEBUG",
+                    f"[{email_addr}] Skipped '{email['subject'][:60]}' for rule: {prompt['name']}",
+                )
+
+        db.mark_processed(account_id, email["id"])
+    except Exception as e:
+        db.add_log("ERROR", f"[{email_addr}] Error processing email '{email.get('subject', '?')[:60]}': {e}")
+        db.mark_processed(account_id, email["id"])  # prevent infinite retry on persistent failures

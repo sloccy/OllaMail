@@ -1,10 +1,11 @@
-import os
 import json
 import secrets
 from urllib.parse import urlparse, parse_qs
 from flask import Flask, jsonify, request, render_template, session, Response
 from app import db, gmail_client, poller, llm_client
-from app.config import POLL_INTERVAL
+from app.config import (POLL_INTERVAL, OLLAMA_MODEL, OLLAMA_HOST, OLLAMA_TIMEOUT,
+                        OLLAMA_NUM_CTX, OLLAMA_NUM_PREDICT, GMAIL_MAX_RESULTS,
+                        GMAIL_LOOKBACK_HOURS, MIN_POLL_INTERVAL, HISTORY_MAX_LIMIT)
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = "placeholder-replaced-at-startup"
@@ -80,12 +81,9 @@ def api_delete_account(account_id):
 
 @app.route("/api/accounts/<int:account_id>/toggle", methods=["POST"])
 def api_toggle_account(account_id):
-    account = db.get_account(account_id)
-    if not account:
+    new_state = db.toggle_account(account_id)
+    if new_state is None:
         return jsonify({"error": "Not found"}), 404
-    new_state = 0 if account["active"] else 1
-    with db.get_db() as conn:
-        conn.execute("UPDATE accounts SET active=? WHERE id=?", (new_state, account_id))
     return jsonify({"active": new_state})
 
 
@@ -199,13 +197,13 @@ def api_export_prompts():
 def api_get_settings():
     return jsonify({
         "poll_interval": int(db.get_setting("poll_interval", str(POLL_INTERVAL))),
-        "ollama_model": os.getenv("OLLAMA_MODEL", "llama3.2"),
-        "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-        "ollama_timeout": int(os.getenv("OLLAMA_TIMEOUT", "600")),
-        "ollama_num_ctx": int(os.getenv("OLLAMA_NUM_CTX", "4096")),
-        "ollama_num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", "200")),
-        "gmail_max_results": int(os.getenv("GMAIL_MAX_RESULTS", "50")),
-        "gmail_lookback_hours": int(os.getenv("GMAIL_LOOKBACK_HOURS", "24")),
+        "ollama_model": OLLAMA_MODEL,
+        "ollama_host": OLLAMA_HOST,
+        "ollama_timeout": OLLAMA_TIMEOUT,
+        "ollama_num_ctx": OLLAMA_NUM_CTX,
+        "ollama_num_predict": OLLAMA_NUM_PREDICT,
+        "gmail_max_results": GMAIL_MAX_RESULTS,
+        "gmail_lookback_hours": GMAIL_LOOKBACK_HOURS,
     })
 
 
@@ -216,8 +214,8 @@ def api_update_settings():
         return jsonify({"error": "JSON body required."}), 400
     if "poll_interval" in data:
         val = int(data["poll_interval"])
-        if val < 30:
-            return jsonify({"error": "Minimum poll interval is 30 seconds"}), 400
+        if val < MIN_POLL_INTERVAL:
+            return jsonify({"error": f"Minimum poll interval is {MIN_POLL_INTERVAL} seconds"}), 400
         db.set_setting("poll_interval", str(val))
         db.add_log("INFO", f"Settings updated: poll_interval={val}s")
     return jsonify({"ok": True})
@@ -376,7 +374,7 @@ def api_get_history():
     prompt_id = request.args.get("prompt_id")
     subject = request.args.get("subject", "").strip()
     sender = request.args.get("sender", "").strip()
-    limit = min(int(request.args.get("limit", 200)), 500)
+    limit = min(int(request.args.get("limit", 200)), HISTORY_MAX_LIMIT)
     rows = db.get_categorization_history(
         account_id=int(account_id) if account_id else None,
         prompt_id=int(prompt_id) if prompt_id else None,

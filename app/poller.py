@@ -1,17 +1,26 @@
-import json
 import time
 import threading
-from app import db, gmail_client, llm_client
-from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS, POLL_INTERVAL
+from app import db
+from app.llm import get_provider
+from app.services.email_processor import process_account
+from app.services.retention import cleanup_retention
+from app.config import POLL_INTERVAL
 
 _stop_event = threading.Event()
 _scan_lock = threading.Lock()
+_status_lock = threading.Lock()
 _thread = None
 _status = {"running": False, "last_run": None, "next_run": None}
 
 
 def get_status():
-    return dict(_status)
+    with _status_lock:
+        return dict(_status)
+
+
+def _set_status(**kwargs):
+    with _status_lock:
+        _status.update(kwargs)
 
 
 def start():
@@ -32,13 +41,13 @@ def run_now():
 
 
 def _loop():
-    _status["running"] = True
+    _set_status(running=True)
     while not _stop_event.is_set():
         _scan_all_accounts()
         interval = int(db.get_setting("poll_interval", str(POLL_INTERVAL)))
-        _status["next_run"] = time.time() + interval
+        _set_status(next_run=time.time() + interval)
         _stop_event.wait(timeout=interval)
-    _status["running"] = False
+    _set_status(running=False)
 
 
 def _scan_all_accounts():
@@ -52,7 +61,7 @@ def _scan_all_accounts():
 
 
 def _run_scan():
-    _status["last_run"] = time.time()
+    _set_status(last_run=time.time())
     db.trim_logs()
     accounts = [a for a in db.list_accounts() if a["active"]]
 
@@ -60,137 +69,16 @@ def _run_scan():
         db.add_log("INFO", "Poller ran: no active accounts configured.")
         return
 
+    provider = get_provider()
+
     for account in accounts:
         prompts = [p for p in db.list_prompts(account_id=account["id"]) if p["active"]]
         if not prompts:
             db.add_log("INFO", f"[{account['email']}] No active prompts for this account.")
             continue
         db.add_log("INFO", f"Starting scan: [{account['email']}] with {len(prompts)} prompt(s).")
-        _scan_account(account, prompts)
-
-
-def _scan_account(account, prompts):
-    account_id = account["id"]
-    email_addr = account["email"]
-    try:
-        service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-        if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
-            db.update_account_credentials(account_id, refreshed_creds)
-
-        emails = gmail_client.fetch_recent_emails(service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS)
-        new_emails = [e for e in emails if not db.is_processed(account_id, e["id"])]
-
-        if not new_emails:
-            db.add_log("INFO", f"[{email_addr}] No new emails to process.")
-            db.update_last_scan(account_id)
-            return
-
-        db.add_log("INFO", f"[{email_addr}] Processing {len(new_emails)} new email(s) against {len(prompts)} rule(s).")
-
-        # Fetch/create all label IDs with a single Gmail API call
-        unique_labels = list({p["label_name"] for p in prompts})
-        label_cache = gmail_client.build_label_cache(service, unique_labels)
-
-        # Process emails one-by-one to respect Ollama concurrency limits
-        # (Ollama may only allow 2 concurrent requests)
-        for email in new_emails:
-            try:
-                # Get results for this single email
-                email_results = llm_client.classify_email_batch(email, prompts)
-
-                stop = False
-
-                for prompt in prompts:
-                    if stop:
-                        break
-                    prompt_id = prompt["id"]
-                    should_label = email_results.get(prompt_id, False)
-
-                    if should_label:
-                        gmail_client.apply_label(service, email["id"], label_cache[prompt["label_name"]])
-                        actions_taken = [f"labeled → {prompt['label_name']}"]
-
-                        if prompt.get("action_spam"):
-                            gmail_client.spam_email(service, email["id"])
-                            actions_taken.append("sent to spam")
-                        elif prompt.get("action_trash"):
-                            gmail_client.trash_email(service, email["id"])
-                            actions_taken.append("trashed")
-                        elif prompt.get("action_archive"):
-                            gmail_client.archive_email(service, email["id"])
-                            actions_taken.append("archived")
-
-                        if prompt.get("action_mark_read"):
-                            gmail_client.mark_email_read(service, email["id"])
-                            actions_taken.append("marked as read")
-
-                        if prompt.get("stop_processing"):
-                            actions_taken.append("stopped further rules")
-                            stop = True
-
-                        db.add_log(
-                            "INFO",
-                            f"[{email_addr}] '{email['subject'][:60]}' — {', '.join(actions_taken)} (rule: {prompt['name']})",
-                        )
-                        db.add_categorization(
-                            account_id=account_id,
-                            account_email=email_addr,
-                            message_id=email["id"],
-                            subject=email.get("subject", ""),
-                            sender=email.get("sender", ""),
-                            prompt_id=prompt["id"],
-                            prompt_name=prompt["name"],
-                            label_name=prompt["label_name"],
-                            actions=", ".join(actions_taken),
-                        )
-                    else:
-                        db.add_log(
-                            "DEBUG",
-                            f"[{email_addr}] Skipped '{email['subject'][:60]}' for rule: {prompt['name']}",
-                        )
-
-                db.mark_processed(account_id, email["id"])
-            except Exception as e:
-                db.add_log("ERROR", f"[{email_addr}] Error processing email: {e}")
-
-        db.update_last_scan(account_id)
-        _cleanup_retention(account, service)
-
-    except Exception as e:
-        db.add_log("ERROR", f"[{email_addr}] Scan failed: {e}")
-
-
-def _cleanup_retention(account, service):
-    account_id = account["id"]
-    email_addr = account["email"]
-    try:
-        retention = db.get_retention(account_id)
-        trashed_ids = set()
-
-        exempt_names = {e["label_name"].lower() for e in retention.get("exemptions", [])}
-
-        # Per-label rules — skip any label that is fully exempted
-        for rule in retention["labels"]:
-            if rule["label_name"].lower() in exempt_names:
-                continue
-            ids = gmail_client.fetch_emails_older_than(service, rule["days"], rule["label_name"])
-            newly_trashed = 0
-            for msg_id in ids:
-                if msg_id not in trashed_ids:
-                    gmail_client.trash_email(service, msg_id)
-                    trashed_ids.add(msg_id)
-                    newly_trashed += 1
-            if newly_trashed:
-                db.add_log("INFO", f"[{email_addr}] Retention: trashed {newly_trashed} email(s) with label '{rule['label_name']}' older than {rule['days']} day(s).")
-
-        # Global rule — exclude labels with their own rule AND exempted labels
-        if retention["global_days"]:
-            excluded = [rule["label_name"] for rule in retention["labels"]] + list(exempt_names)
-            ids = gmail_client.fetch_emails_older_than(service, retention["global_days"], excluded_labels=excluded)
-            new_ids = [i for i in ids if i not in trashed_ids]
-            for msg_id in new_ids:
-                gmail_client.trash_email(service, msg_id)
-            if new_ids:
-                db.add_log("INFO", f"[{email_addr}] Retention: trashed {len(new_ids)} email(s) older than {retention['global_days']} day(s) (global rule).")
-    except Exception as e:
-        db.add_log("ERROR", f"[{email_addr}] Retention cleanup failed: {e}")
+        try:
+            service = process_account(account, prompts, provider)
+            cleanup_retention(account, service)
+        except Exception as e:
+            db.add_log("ERROR", f"[{account['email']}] Scan failed: {e}")
