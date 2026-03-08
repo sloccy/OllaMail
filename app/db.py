@@ -274,7 +274,7 @@ def update_prompt(prompt_id, name, instructions, label_name, active,
 def reorder_prompts(ordered_ids: list):
     with get_db() as conn:
         for i, pid in enumerate(ordered_ids):
-            conn.execute("UPDATE prompts SET sort_order=? WHERE id=?", (i, pid))
+            conn.execute("UPDATE prompts SET sort_order=? WHERE id=?", (i + 1, pid))
 
 
 def delete_prompt(prompt_id):
