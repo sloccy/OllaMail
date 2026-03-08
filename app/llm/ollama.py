@@ -29,11 +29,11 @@ class OllamaProvider(LLMProvider):
             return {}
 
         rules_text = "\n".join(
-            f"{i+1}. [id:{p['id']}] {p['name']}: {p['instructions']}"
+            f"{i+1}. {p['name']}: {p['instructions']}"
             for i, p in enumerate(prompts)
         )
 
-        example = ", ".join(f'"{p["id"]}": false' for p in prompts[:2])
+        example = ", ".join(f'"{i+1}": false' for i in range(min(2, len(prompts))))
         prompt = f"""You are an email classification assistant. You will be given an email and a list of labeling rules. For each rule, decide if the label should be applied to this email.
 
 Rules:
@@ -45,7 +45,7 @@ Subject: {email['subject']}
 Body:
 {email['body'] or email['snippet']}
 
-Respond with ONLY a JSON object where each key is the rule's [id] number and the value is true or false.
+Respond with ONLY a JSON object where each key is the rule's number (1, 2, 3...) and the value is true or false.
 Example: {{{example}}}
 No explanation, no markdown, just the JSON object."""
 
@@ -57,7 +57,7 @@ No explanation, no markdown, just the JSON object."""
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are an email classification assistant. Respond only with a JSON object mapping rule IDs to true/false. No explanation, no markdown.",
+                            "content": "You are an email classification assistant. Respond only with a JSON object mapping rule numbers to true/false. No explanation, no markdown.",
                         },
                         {"role": "user", "content": prompt},
                     ],
@@ -85,7 +85,11 @@ No explanation, no markdown, just the JSON object."""
 
             try:
                 result = json.loads(raw)
-                parsed = {int(k): bool(v) for k, v in result.items()}
+                parsed = {}
+                for k, v in result.items():
+                    idx = int(k) - 1
+                    if 0 <= idx < len(prompts):
+                        parsed[prompts[idx]["id"]] = bool(v)
                 db.add_log("DEBUG", f"LLM raw response: {raw}")
                 db.add_log("DEBUG", f"LLM parsed: { {p['name']: parsed.get(p['id'], False) for p in prompts} }")
                 return parsed
