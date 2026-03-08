@@ -104,20 +104,20 @@ No explanation, no markdown, just the JSON object."""
 
     def _build_generate_request(self, description: str) -> dict:
         system_prompt = (
-            "You write precise email filter rules for an AI classifier. "
-            "The rule must specify:\n"
-            "- Exact positive signals (what SHOULD trigger the label)\n"
-            "- What should NOT trigger it (to prevent false positives)\n"
-            "- Specific sender domains, subject keywords, or body patterns where applicable\n"
+            "You write email filter rules for an AI classifier. "
+            "The classifier reads email content and infers meaning, intent, and context — "
+            "it is NOT limited to keywords or sender addresses. "
+            "Rules should describe what an email is about, its purpose, and tone. "
+            "Be specific about what should match and what should not.\n"
             "Output only the rule text. No preamble, no quotes, no explanation."
         )
         user_prompt = (
             f'A user wants to automatically label certain emails. They described:\n\n"{description}"\n\n'
-            "Write a precise classifier instruction (2-5 sentences). Be concrete:\n"
-            "- State what specific content, sender patterns, or subject keywords indicate a match\n"
-            "- State what distinguishes these emails from similar-but-different ones (to avoid false positives)\n"
-            "- If the description is generic (e.g. \"promotional emails\"), name specific signals: "
-            "unsubscribe links, \"% off\", bulk sender headers, marketing domains, etc.\n\n"
+            "Write a precise classifier instruction (2-5 sentences). "
+            "Focus on the meaning and context of the email — what it is about, why it was sent, "
+            "and who it is intended for. Describe what distinguishes matching emails from "
+            "similar-but-different ones based on content and intent, not just surface signals "
+            "like sender address or keywords.\n\n"
             "Respond with ONLY the instruction text."
         )
         return {
