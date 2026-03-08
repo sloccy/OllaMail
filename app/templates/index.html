@@ -791,7 +791,7 @@
            ondragover="onDragOver(event)"
            ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
         <div class="card-row">
-          <div class="drag-handle" title="Drag to reorder" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)">&#9776;</div>
+          <div class="drag-handle" title="Drag to reorder" draggable="true" ondragstart="onDragStart(event)" ondragend="onDragEnd(event)" ondragover="onDragOver(event)" ondrop="onDrop(event)">&#9776;</div>
           <div style="flex:1">
             <div class="card-title">${esc(p.name)}</div>
             <div class="card-meta">Created ${fmtDate(p.created_at)}</div>
@@ -955,11 +955,14 @@
   function onDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    const card = e.currentTarget;
+    const card = e.currentTarget.closest('.card[data-id]') || e.currentTarget;
     if (parseInt(card.dataset.id) !== _dragSrcId) card.classList.add('drag-over');
   }
 
-  function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+  function onDragLeave(e) {
+    const card = e.currentTarget.closest('.card[data-id]') || e.currentTarget;
+    card.classList.remove('drag-over');
+  }
 
   function onDragEnd(e) {
     document.querySelectorAll('.card').forEach(c => c.classList.remove('dragging', 'drag-over'));
@@ -967,8 +970,9 @@
 
   async function onDrop(e) {
     e.preventDefault();
-    const targetId = parseInt(e.currentTarget.dataset.id);
-    e.currentTarget.classList.remove('drag-over');
+    const card = e.currentTarget.closest('.card[data-id]') || e.currentTarget;
+    const targetId = parseInt(card.dataset.id);
+    card.classList.remove('drag-over');
     if (!_dragSrcId || _dragSrcId === targetId) return;
     const cards = [...document.querySelectorAll('#prompts-list .card[data-id]')];
     const orderedIds = cards.map(c => parseInt(c.dataset.id));
@@ -976,11 +980,16 @@
     const tgtIdx = orderedIds.indexOf(targetId);
     orderedIds.splice(srcIdx, 1);
     orderedIds.splice(tgtIdx, 0, _dragSrcId);
-    await fetch('/api/prompts/reorder', {
+    _dragSrcId = null;
+    const resp = await fetch('/api/prompts/reorder', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ordered_ids: orderedIds }),
     });
-    loadPrompts();
+    if (!resp.ok) {
+      toast('Failed to save order.', 'error');
+    } else {
+      loadPrompts();
+    }
   }
 
   // ---- Settings ----
