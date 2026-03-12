@@ -29,7 +29,7 @@
     .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500; border-left: 2px solid transparent; transition: color 0.15s, border-color 0.15s, background 0.15s; user-select: none; border-radius: 0 6px 6px 0; margin-right: 8px; }
     .nav-item:hover { color: var(--text); background: var(--surface2); }
     .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-dim); box-shadow: inset 0 0 0 1px rgba(74,158,255,0.08); }
-    .nav-icon { font-size: 13px; width: 18px; text-align: center; opacity: 0.7; }
+    .nav-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.7; flex-shrink: 0; }
     .nav-item.active .nav-icon { opacity: 1; }
     .sidebar-footer { padding: 16px 20px 0; border-top: 1px solid var(--border); }
     .status-pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
@@ -126,8 +126,11 @@
 
     /* Logs */
     .log-list { font-family: var(--mono); font-size: 12px; }
-    .log-entry { display: grid; grid-template-columns: 160px 50px 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); align-items: start; }
+    .log-entry { display: grid; grid-template-columns: 160px 50px 1fr; gap: 12px; padding: 7px 0 7px 10px; border-bottom: 1px solid var(--border); border-left: 3px solid var(--muted2); align-items: start; }
     .log-entry:last-child { border-bottom: none; }
+    .log-entry.INFO { border-left-color: var(--blue); }
+    .log-entry.ERROR { border-left-color: var(--red); }
+    .log-entry.DEBUG { border-left-color: var(--muted2); }
     .log-time { color: var(--muted); }
     .log-level { font-weight: 500; }
     .log-level.INFO { color: var(--blue); }
@@ -145,8 +148,10 @@
 
     /* Stats */
     .stats-row { display: flex; gap: 14px; margin-bottom: 28px; }
-    .stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; position: relative; overflow: hidden; }
-    .stat::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--border2), transparent); }
+    .stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; position: relative; overflow: hidden; border-top: 2px solid var(--muted2); }
+    .stat.stat-blue { border-top-color: var(--blue); }
+    .stat.stat-green { border-top-color: var(--green); }
+    .stat.stat-muted { border-top-color: var(--muted); }
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 8px; }
     .stat-value { font-family: var(--mono); font-size: 24px; font-weight: 500; }
     .stat-value.accent { color: var(--accent); text-shadow: 0 0 20px rgba(74,158,255,0.3); }
@@ -177,11 +182,14 @@
     .history-table .col-rule { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .history-table .col-label { width: 120px; }
     .history-table .col-actions { width: 110px; }
+    .history-table tbody tr:hover td { background: var(--surface2); }
 
     #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border2); border-radius: 9px; padding: 12px 18px; font-size: 13px; box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03); transform: translateY(80px); opacity: 0; transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; z-index: 999; max-width: 340px; }
     #toast.show { transform: translateY(0); opacity: 1; }
     #toast.success { border-color: rgba(34,197,94,0.4); box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 16px rgba(34,197,94,0.12); }
     #toast.error { border-color: rgba(239,68,68,0.4); box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 16px rgba(239,68,68,0.12); }
+    @keyframes pulse-border { 0%, 100% { box-shadow: 0 2px 12px rgba(74,158,255,0.25); } 50% { box-shadow: 0 0 0 3px rgba(74,158,255,0.35), 0 2px 18px rgba(74,158,255,0.4); } }
+    .btn-generating { animation: pulse-border 1.2s ease-in-out infinite; }
   </style>
 </head>
 <body>
@@ -191,14 +199,14 @@
       <img src="{{ url_for('static', filename='logo.png') }}" alt="OllaMail">
     </div>
     <nav class="nav">
-      <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard', this)"><span class="nav-icon">&#9632;</span> Dashboard</div>
-      <div class="nav-item" data-page="accounts" onclick="navigate('accounts', this)"><span class="nav-icon">&#9675;</span> Accounts</div>
-      <div class="nav-item" data-page="prompts" onclick="navigate('prompts', this)"><span class="nav-icon">&#9671;</span> Prompts</div>
-      <div class="nav-item" data-page="builder" onclick="navigate('builder', this)"><span class="nav-icon">&#9670;</span> Builder</div>
-      <div class="nav-item" data-page="settings" onclick="navigate('settings', this)"><span class="nav-icon">&#9633;</span> Settings</div>
-      <div class="nav-item" data-page="logs" onclick="navigate('logs', this)"><span class="nav-icon">&#9645;</span> Logs</div>
-      <div class="nav-item" data-page="history" onclick="navigate('history', this)"><span class="nav-icon">&#9699;</span> History</div>
-      <div class="nav-item" data-page="retention" onclick="navigate('retention', this)"><span class="nav-icon">&#9673;</span> Retention</div>
+      <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span> Dashboard</div>
+      <div class="nav-item" data-page="accounts" onclick="navigate('accounts', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke-linecap="round"/></svg></span> Accounts</div>
+      <div class="nav-item" data-page="prompts" onclick="navigate('prompts', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h5.5l6.5 6.5-5 5L2.5 7V2z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg></span> Prompts</div>
+      <div class="nav-item" data-page="builder" onclick="navigate('builder', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14l8-8" stroke-linecap="round"/><path d="M10.5 2l1.2 2.3 2.3 1.2-2.3 1.2-1.2 2.3-1.2-2.3-2.3-1.2 2.3-1.2z" fill="currentColor" stroke="none"/></svg></span> Builder</div>
+      <div class="nav-item" data-page="settings" onclick="navigate('settings', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3" stroke-linecap="round"/></svg></span> Settings</div>
+      <div class="nav-item" data-page="logs" onclick="navigate('logs', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6" stroke-linecap="round"/></svg></span> Logs</div>
+      <div class="nav-item" data-page="history" onclick="navigate('history', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> History</div>
+      <div class="nav-item" data-page="retention" onclick="navigate('retention', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v7h10V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5h4" stroke-linecap="round"/></svg></span> Retention</div>
     </nav>
     <div class="sidebar-footer">
       <div class="status-pill">
@@ -217,13 +225,13 @@
         <button class="btn btn-ghost" onclick="scanNow()">&#9654; Scan Now</button>
       </div>
       <div class="stats-row">
-        <div class="stat"><div class="stat-label">Accounts</div><div class="stat-value accent" id="stat-accounts">—</div></div>
-        <div class="stat"><div class="stat-label">Active Prompts</div><div class="stat-value accent" id="stat-prompts">—</div></div>
-        <div class="stat"><div class="stat-label">Poll Interval</div><div class="stat-value" id="stat-interval">—</div></div>
-        <div class="stat"><div class="stat-label">Next Scan</div><div class="stat-value green" id="stat-next">—</div></div>
+        <div class="stat stat-blue"><div class="stat-label">Accounts</div><div class="stat-value accent" id="stat-accounts">—</div></div>
+        <div class="stat stat-green"><div class="stat-label">Active Prompts</div><div class="stat-value accent" id="stat-prompts">—</div></div>
+        <div class="stat stat-muted"><div class="stat-label">Poll Interval</div><div class="stat-value" id="stat-interval">—</div></div>
+        <div class="stat stat-green"><div class="stat-label">Next Scan</div><div class="stat-value green" id="stat-next">—</div></div>
       </div>
       <div class="form-title">Recent Activity</div>
-      <div id="dashboard-logs" class="log-list"><div class="empty"><div class="empty-icon">&#9648;</div>No logs yet.</div></div>
+      <div id="dashboard-logs" class="log-list"><div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="24" height="20" rx="2"/><path d="M4 12h24"/><path d="M10 18h4M10 22h8"/></svg></div>No logs yet.</div></div>
     </div>
 
     <!-- Accounts -->
@@ -268,7 +276,7 @@
           </div>
         </div>
       </div>
-      <div id="accounts-list"><div class="empty"><div class="empty-icon">&#9675;</div>No accounts added yet.</div></div>
+      <div id="accounts-list"><div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="11" r="6"/><path d="M4 28c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke-linecap="round"/></svg></div>No accounts added yet.</div></div>
     </div>
 
     <!-- Prompts -->
@@ -332,7 +340,7 @@
         </div>
       </div>
 
-      <div id="prompts-list"><div class="empty"><div class="empty-icon">&#9671;</div>No prompts yet. Add one to start labeling.</div></div>
+      <div id="prompts-list"><div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h11l13 13-10 10L4 15V4z" stroke-linejoin="round"/><circle cx="11" cy="11" r="2" fill="currentColor" stroke="none"/></svg></div>No prompts yet. Add one to start labeling.</div></div>
     </div>
 
     <!-- Builder -->
@@ -370,17 +378,19 @@
         <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
       </div>
       <div class="settings-grid">
-        <div class="setting-row">
-          <div><div class="setting-label">Poll interval</div><div class="setting-desc">How often to scan for new emails (seconds). Minimum 30.</div></div>
-          <div class="setting-control"><input type="number" id="setting-poll-interval" min="30" step="30" value="300"></div>
-        </div>
-        <div class="setting-row">
-          <div><div class="setting-label">Ollama model</div><div class="setting-desc">Set via OLLAMA_MODEL in docker-compose.yml</div></div>
-          <div class="setting-control"><span class="tag" id="setting-model">—</span></div>
-        </div>
-        <div class="setting-row">
-          <div><div class="setting-label">Ollama host</div><div class="setting-desc">Set via OLLAMA_HOST in docker-compose.yml</div></div>
-          <div class="setting-control"><span class="tag" id="setting-host">—</span></div>
+        <div class="card" style="padding:0 22px;">
+          <div class="setting-row">
+            <div><div class="setting-label">Poll interval</div><div class="setting-desc">How often to scan for new emails (seconds). Minimum 30.</div></div>
+            <div class="setting-control"><input type="number" id="setting-poll-interval" min="30" step="30" value="300"></div>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Ollama model</div><div class="setting-desc">Set via OLLAMA_MODEL in docker-compose.yml</div></div>
+            <div class="setting-control"><span class="tag" id="setting-model">—</span></div>
+          </div>
+          <div class="setting-row" style="border-bottom:none;">
+            <div><div class="setting-label">Ollama host</div><div class="setting-desc">Set via OLLAMA_HOST in docker-compose.yml</div></div>
+            <div class="setting-control"><span class="tag" id="setting-host">—</span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -408,7 +418,7 @@
         </div>
         <button class="btn btn-primary btn-sm" onclick="downloadLogs()">Download CSV</button>
       </div>
-      <div id="logs-list" class="log-list"><div class="empty"><div class="empty-icon">&#9645;</div>No logs yet.</div></div>
+      <div id="logs-list" class="log-list"><div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 8h20M6 14h20M6 20h14" stroke-linecap="round"/></svg></div>No logs yet.</div></div>
     </div>
 
     <!-- Categorization History -->
@@ -454,7 +464,7 @@
             </tr>
           </thead>
           <tbody id="hist-body">
-            <tr><td colspan="7"><div class="empty"><div class="empty-icon">&#9699;</div>No history yet. Labels will appear here after emails are scanned.</div></td></tr>
+            <tr><td colspan="7"><div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 10v6l4 3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>No history yet. Labels will appear here after emails are scanned.</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -539,7 +549,7 @@
         </div>
       </div>
       <div id="retention-empty" style="display:none;" class="empty">
-        <div class="empty-icon">&#9673;</div>
+        <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="24" height="6" rx="1"/><path d="M6 12v14h20V12"/><path d="M12 18h8" stroke-linecap="round"/></svg></div>
         No accounts found. Add a Gmail account first.
       </div>
     </div>
@@ -724,7 +734,7 @@
     _accounts = accounts;
     const el = document.getElementById('accounts-list');
     if (!accounts.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">&#9675;</div>No accounts added yet.</div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="11" r="6"/><path d="M4 28c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke-linecap="round"/></svg></div>No accounts added yet.</div>';
       return;
     }
     el.innerHTML = accounts.map(a => `
@@ -766,7 +776,7 @@
     const el = document.getElementById('prompts-list');
 
     if (!prompts.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">&#9671;</div>No prompts yet. Add one to start labeling.</div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h11l13 13-10 10L4 15V4z" stroke-linejoin="round"/><circle cx="11" cy="11" r="2" fill="currentColor" stroke="none"/></svg></div>No prompts yet. Add one to start labeling.</div>';
       return;
     }
 
@@ -1041,11 +1051,11 @@
   function renderLogs(logs, containerId) {
     const el = document.getElementById(containerId);
     if (!logs.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">&#9645;</div>No logs yet.</div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 8h20M6 14h20M6 20h14" stroke-linecap="round"/></svg></div>No logs yet.</div>';
       return;
     }
     el.innerHTML = logs.map(l => `
-      <div class="log-entry">
+      <div class="log-entry ${l.level}">
         <span class="log-time">${fmtDate(l.timestamp)}</span>
         <span class="log-level ${l.level}">${l.level}</span>
         <span class="log-msg">${esc(l.message)}</span>
@@ -1058,7 +1068,7 @@
     if (!description) { toast('Describe the emails first.', 'error'); return; }
     const btn = document.getElementById('btn-generate');
     const useBtn = document.getElementById('btn-use-prompt');
-    btn.disabled = true; btn.textContent = 'Generating...';
+    btn.disabled = true; btn.textContent = 'Generating...'; btn.classList.add('btn-generating');
     useBtn.disabled = true;
     const resultEl = document.getElementById('builder-result');
     const thinkWrap = document.getElementById('builder-thinking-wrap');
@@ -1073,7 +1083,7 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description }),
       });
-      if (!r.ok) { toast('Generation failed.', 'error'); resultEl.style.display = 'none'; return; }
+      if (!r.ok) { toast('Generation failed.', 'error'); resultEl.style.display = 'none'; btn.classList.remove('btn-generating'); return; }
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
@@ -1086,10 +1096,10 @@
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
-          if (payload === '[DONE]') { btn.disabled = false; btn.textContent = '◆ Generate Instruction'; useBtn.disabled = false; return; }
+          if (payload === '[DONE]') { btn.disabled = false; btn.textContent = '◆ Generate Instruction'; btn.classList.remove('btn-generating'); useBtn.disabled = false; return; }
           try {
             const evt = JSON.parse(payload);
-            if (evt.type === 'error') { toast(evt.text, 'error'); resultEl.style.display = 'none'; return; }
+            if (evt.type === 'error') { toast(evt.text, 'error'); resultEl.style.display = 'none'; btn.classList.remove('btn-generating'); return; }
             if (evt.type === 'think') { thinkWrap.style.display = 'block'; thinkEl.textContent += evt.text; thinkEl.scrollTop = thinkEl.scrollHeight; }
             if (evt.type === 'content') { instructionEl.value += evt.text; }
           } catch (_) {}
@@ -1099,7 +1109,7 @@
       toast('Generation failed.', 'error');
       resultEl.style.display = 'none';
     } finally {
-      btn.disabled = false; btn.textContent = '◆ Generate Instruction';
+      btn.disabled = false; btn.textContent = '◆ Generate Instruction'; btn.classList.remove('btn-generating');
     }
   }
 
@@ -1166,7 +1176,7 @@
     const tbody = document.getElementById('hist-body');
     const countEl = document.getElementById('hist-count');
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">&#9699;</div>No matching history found.</div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 10v6l4 3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>No matching history found.</div></td></tr>';
       countEl.textContent = '';
       return;
     }
@@ -1306,7 +1316,7 @@
   function renderExemptionsList(exemptions, accountId) {
     const el = document.getElementById('label-exemptions-list');
     if (!exemptions.length) {
-      el.innerHTML = '<div class="empty" style="padding:16px 0 6px;"><div class="empty-icon" style="font-size:20px;">&#9673;</div>No exemptions yet.</div>';
+      el.innerHTML = '<div class="empty" style="padding:16px 0 6px;"><div class="empty-icon"><svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="24" height="6" rx="1"/><path d="M6 12v14h20V12"/><path d="M12 18h8" stroke-linecap="round"/></svg></div>No exemptions yet.</div>';
     } else {
       el.innerHTML = exemptions.map(e => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
@@ -1322,7 +1332,7 @@
   function renderLabelRetentionList(labels, accountId, exemptions) {
     const el = document.getElementById('label-retention-list');
     if (!labels.length) {
-      el.innerHTML = '<div class="empty" style="padding:20px 0 10px;"><div class="empty-icon" style="font-size:20px;">&#9673;</div>No label rules yet.</div>';
+      el.innerHTML = '<div class="empty" style="padding:20px 0 10px;"><div class="empty-icon"><svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="24" height="6" rx="1"/><path d="M6 12v14h20V12"/><path d="M12 18h8" stroke-linecap="round"/></svg></div>No label rules yet.</div>';
     } else {
       el.innerHTML = labels.map(r => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
