@@ -894,6 +894,69 @@ def frag_scan():
     return resp
 
 
+@app.route("/fragments/account-options")
+def frag_account_options():
+    import html as _html
+    opt_type = request.args.get("type", "filter")
+    accounts = _safe_accounts(db.list_accounts())
+    if opt_type == "new-prompt":
+        first = '<option value="">All accounts (global)</option>'
+    elif opt_type == "retention":
+        first = '<option value="">Select an account\u2026</option>'
+    else:
+        first = '<option value="">All accounts</option>'
+    options = first + "".join(
+        f'<option value="{a["id"]}">{_html.escape(a["email"])}</option>'
+        for a in accounts
+    )
+    return Response(options, content_type="text/html")
+
+
+@app.route("/fragments/retention-query")
+def frag_retention_query():
+    account_id = request.args.get("account_id", "").strip()
+    if not account_id:
+        return Response("", content_type="text/html")
+    account_id = int(account_id)
+    account = db.get_account(account_id)
+    if not account:
+        return Response("", content_type="text/html")
+    retention = db.get_retention(account_id)
+    try:
+        service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+        if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
+            db.update_account_credentials(account_id, refreshed_creds)
+        gmail_labels = gmail_client.list_labels(service)
+    except Exception:
+        gmail_labels = []
+    return fragment_response("fragments/retention_panel.html",
+                             {"retention": retention, "account_id": account_id,
+                              "gmail_labels": gmail_labels})
+
+
+@app.route("/api/prompts/generate-stream")
+def api_generate_prompt_stream():
+    description = request.args.get("description", "").strip()
+
+    def generate():
+        if not description:
+            yield "event: done\ndata: \n\n"
+            return
+        try:
+            for event in llm_client.stream_generate_prompt_instruction(description):
+                event_type = event.get("type", "content")
+                text = event.get("text", "")
+                lines = ["event: " + event_type] + [f"data: {l}" for l in text.split("\n")] + ["", ""]
+                yield "\n".join(lines)
+            yield "event: done\ndata: \n\n"
+        except Exception as e:
+            db.add_log("ERROR", f"Prompt generation failed: {e}")
+            yield "event: error\ndata: Generation failed. Check Ollama is running.\n\n"
+            yield "event: done\ndata: \n\n"
+
+    return Response(generate(), content_type="text/event-stream")
+
+
 # ---- Startup ----
 
 def _get_or_create_secret_key() -> str:
