@@ -237,7 +237,7 @@
     <div class="page" id="page-accounts">
       <div class="page-header">
         <div><div class="page-title">Accounts</div><div class="page-sub">Gmail accounts being monitored</div></div>
-        <button class="btn btn-primary" onclick="toggleAddAccount()">+ Add Account</button>
+        <button class="btn btn-primary" onclick="document.getElementById('add-account-panel').classList.toggle('open')">+ Add Account</button>
       </div>
       <div class="panel" id="add-account-panel">
         <div class="panel-title">Connect a Gmail Account</div>
@@ -275,7 +275,7 @@
                   <input type="text" name="url" id="oauth-redirect-url" placeholder="http://localhost/?state=...&code=..." style="font-family:var(--mono);font-size:12px;">
                 </div>
                 <button type="submit" class="btn btn-primary">Connect Account</button>
-                <button type="button" class="btn btn-ghost" onclick="toggleAddAccount()" style="margin-left:8px;">Cancel</button>
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-account-panel').classList.toggle('open')" style="margin-left:8px;">Cancel</button>
               </form>
             </div>
           </div>
@@ -295,7 +295,7 @@
         <div><div class="page-title">Prompts</div><div class="page-sub">Rules the AI uses to decide which labels to apply</div></div>
         <div style="display:flex;gap:10px;">
           <button class="btn btn-ghost" onclick="exportPrompts()" id="btn-export">&#8595; Export</button>
-          <button class="btn btn-primary" onclick="toggleAddPrompt()">+ Add Prompt</button>
+          <button class="btn btn-primary" onclick="document.getElementById('add-prompt-panel').classList.toggle('open')">+ Add Prompt</button>
         </div>
       </div>
 
@@ -354,7 +354,7 @@
           </div>
           <div style="display:flex;gap:10px;margin-top:14px;">
             <button type="submit" class="btn btn-primary">Save Rule</button>
-            <button type="button" class="btn btn-ghost" onclick="toggleAddPrompt()">Cancel</button>
+            <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-prompt-panel').classList.toggle('open')">Cancel</button>
           </div>
         </form>
       </div>
@@ -416,7 +416,7 @@
       <div class="page-header">
         <div><div class="page-title">Logs</div><div class="page-sub">Last 100 events</div></div>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost" onclick="toggleLogDownload()">&#8659; Download</button>
+          <button class="btn btn-ghost" onclick="(function(p){p.classList.toggle('open');if(p.classList.contains('open')){const now=new Date(),y=new Date(now-86400000),f=d=>new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);document.getElementById('log-dl-end').value=f(now);document.getElementById('log-dl-start').value=f(y);}})(document.getElementById('log-download-panel'))">&#8659; Download</button>
           <button class="btn btn-ghost"
             hx-get="/fragments/logs"
             hx-target="#logs-content"
@@ -515,27 +515,6 @@
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
     el.classList.add('active');
-  }
-
-  // ---- Panel toggles ----
-  function toggleAddAccount() {
-    document.getElementById('add-account-panel').classList.toggle('open');
-  }
-
-  function toggleAddPrompt() {
-    document.getElementById('add-prompt-panel').classList.toggle('open');
-  }
-
-  function toggleLogDownload() {
-    const panel = document.getElementById('log-download-panel');
-    panel.classList.toggle('open');
-    if (panel.classList.contains('open')) {
-      const now = new Date();
-      const yesterday = new Date(now - 86400000);
-      const toLocal = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      document.getElementById('log-dl-end').value = toLocal(now);
-      document.getElementById('log-dl-start').value = toLocal(yesterday);
-    }
   }
 
   // ---- Export prompts (file download, no HTMX equivalent) ----
