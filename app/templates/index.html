@@ -6,6 +6,7 @@
   <title>OllaMail</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" defer></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -303,11 +304,9 @@
       <div class="filter-bar">
         <label style="color:var(--muted);font-size:12.5px;">Show rules for:</label>
         <select id="prompt-filter-account" name="account_id"
-          hx-get="/fragments/prompts"
-          hx-target="#prompts-list"
-          hx-swap="innerHTML"
-          hx-trigger="change">
-          <option value="">All accounts</option>
+          hx-get="/fragments/account-options?type=filter"
+          hx-trigger="load"
+          hx-swap="innerHTML">
         </select>
       </div>
 
@@ -330,8 +329,10 @@
           </div>
           <div class="form-group">
             <label>Apply to account</label>
-            <select name="account_id" id="new-prompt-account">
-              <option value="">All accounts (global)</option>
+            <select name="account_id" id="new-prompt-account"
+              hx-get="/fragments/account-options?type=new-prompt"
+              hx-trigger="load"
+              hx-swap="innerHTML">
             </select>
             <div class="form-hint">Global rules run on every account. Account-specific rules only run for that account.</div>
           </div>
@@ -361,7 +362,7 @@
 
       <div id="prompts-list"
         hx-get="/fragments/prompts"
-        hx-trigger="load"
+        hx-trigger="load, change from:#prompt-filter-account"
         hx-include="#prompt-filter-account"
         hx-swap="innerHTML">
         <div class="empty"><div class="empty-icon">&#9670;</div>Loading…</div>
@@ -382,14 +383,17 @@
 
         <div id="builder-result" style="display:none;margin-top:28px;">
           <hr class="divider">
-          <div id="builder-thinking-wrap" style="display:none;margin-bottom:18px;">
-            <div style="font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:6px;letter-spacing:0.05em;">&#9670; THINKING</div>
-            <div id="builder-thinking" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12px;font-family:var(--mono);color:var(--muted);white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6;"></div>
-          </div>
-          <div class="form-title">Generated instruction</div>
-          <div class="form-group">
-            <textarea id="builder-instruction" rows="5"></textarea>
-            <div class="form-hint">Edit if needed, then send it to the Prompts page.</div>
+          <div id="builder-sse-container" hx-ext="sse" sse-close="done">
+            <div id="builder-thinking-wrap" style="margin-bottom:18px;">
+              <div style="font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:6px;letter-spacing:0.05em;">&#9670; THINKING</div>
+              <div id="builder-thinking" sse-swap="think" hx-swap="beforeend"
+                style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12px;font-family:var(--mono);color:var(--muted);white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6;"></div>
+            </div>
+            <div class="form-title">Generated instruction</div>
+            <div class="form-group">
+              <textarea id="builder-instruction" rows="5" sse-swap="content" hx-swap="beforeend"></textarea>
+              <div class="form-hint">Edit if needed, then send it to the Prompts page.</div>
+            </div>
           </div>
           <button class="btn btn-ghost" id="btn-use-prompt" disabled onclick="useBuilderInstruction()">&#8599; Use this prompt</button>
         </div>
@@ -486,11 +490,17 @@
       </div>
       <div class="filter-bar" style="margin-bottom:24px;">
         <label>Account</label>
-        <select id="retention-account-select">
-          <option value="">Select an account…</option>
+        <select id="retention-account-select" name="account_id"
+          hx-get="/fragments/account-options?type=retention"
+          hx-trigger="load"
+          hx-swap="innerHTML">
         </select>
       </div>
-      <div id="retention-panel" style="max-width:620px;"></div>
+      <div id="retention-panel" style="max-width:620px;"
+        hx-get="/fragments/retention-query"
+        hx-trigger="change from:#retention-account-select"
+        hx-include="#retention-account-select"
+        hx-swap="innerHTML"></div>
     </div>
 
   </main>
@@ -588,56 +598,27 @@
     }
   }
 
-  // ---- Builder SSE (keep as-is; POST-triggered SSE doesn't fit htmx-sse) ----
-  async function generatePrompt() {
-    const description = document.getElementById('builder-description').value.trim();
-    if (!description) { toast('Describe the emails first.', 'error'); return; }
+  // ---- Builder SSE ----
+  function generatePrompt() {
+    const desc = document.getElementById('builder-description').value.trim();
+    if (!desc) { toast('Describe the emails first.', 'error'); return; }
     const btn = document.getElementById('btn-generate');
-    const useBtn = document.getElementById('btn-use-prompt');
     btn.disabled = true; btn.textContent = 'Generating...'; btn.classList.add('btn-generating');
-    useBtn.disabled = true;
-    const resultEl = document.getElementById('builder-result');
-    const thinkWrap = document.getElementById('builder-thinking-wrap');
-    const thinkEl = document.getElementById('builder-thinking');
-    const instructionEl = document.getElementById('builder-instruction');
-    resultEl.style.display = 'block';
-    thinkWrap.style.display = 'none';
-    thinkEl.textContent = '';
-    instructionEl.value = '';
-    try {
-      const r = await fetch('/api/prompts/generate', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description }),
-      });
-      if (!r.ok) { toast('Generation failed.', 'error'); resultEl.style.display = 'none'; btn.classList.remove('btn-generating'); return; }
-      const reader = r.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6).trim();
-          if (payload === '[DONE]') { btn.disabled = false; btn.textContent = '◆ Generate Instruction'; btn.classList.remove('btn-generating'); useBtn.disabled = false; return; }
-          try {
-            const evt = JSON.parse(payload);
-            if (evt.type === 'error') { toast(evt.text, 'error'); resultEl.style.display = 'none'; btn.classList.remove('btn-generating'); return; }
-            if (evt.type === 'think') { thinkWrap.style.display = 'block'; thinkEl.textContent += evt.text; thinkEl.scrollTop = thinkEl.scrollHeight; }
-            if (evt.type === 'content') { instructionEl.value += evt.text; }
-          } catch (_) {}
-        }
-      }
-    } catch (e) {
-      toast('Generation failed.', 'error');
-      resultEl.style.display = 'none';
-    } finally {
-      btn.disabled = false; btn.textContent = '◆ Generate Instruction'; btn.classList.remove('btn-generating');
-    }
+    document.getElementById('builder-result').style.display = 'block';
+    document.getElementById('builder-thinking').textContent = '';
+    document.getElementById('builder-instruction').value = '';
+    const container = document.getElementById('builder-sse-container');
+    container.setAttribute('sse-connect', '/api/prompts/generate-stream?description=' + encodeURIComponent(desc));
+    htmx.process(container);
   }
+
+  document.body.addEventListener('htmx:sseClose', function(e) {
+    if (e.detail && e.detail.elt && e.detail.elt.id === 'builder-sse-container') {
+      const btn = document.getElementById('btn-generate');
+      btn.disabled = false; btn.textContent = '◆ Generate Instruction'; btn.classList.remove('btn-generating');
+      document.getElementById('btn-use-prompt').disabled = false;
+    }
+  });
 
   function useBuilderInstruction() {
     const instruction = document.getElementById('builder-instruction').value.trim();
@@ -682,46 +663,6 @@
     }
   }
 
-  // ---- Populate account selects (prompts add form + retention) ----
-  async function _loadAccountOptions() {
-    const accounts = await fetch('/api/accounts').then(r => r.json());
-    const sel = document.getElementById('new-prompt-account');
-    if (sel) {
-      sel.innerHTML = '<option value="">All accounts (global)</option>' +
-        accounts.map(a => `<option value="${a.id}">${a.email.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</option>`).join('');
-    }
-    const filterSel = document.getElementById('prompt-filter-account');
-    if (filterSel) {
-      const cur = filterSel.value;
-      filterSel.innerHTML = '<option value="">All accounts</option>' +
-        accounts.map(a => `<option value="${a.id}" ${cur == a.id ? 'selected' : ''}>${a.email.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</option>`).join('');
-    }
-    const retSel = document.getElementById('retention-account-select');
-    if (retSel) {
-      const cur = retSel.value;
-      retSel.innerHTML = '<option value="">Select an account…</option>' +
-        accounts.map(a => `<option value="${a.id}" ${cur == a.id ? 'selected' : ''}>${a.email.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</option>`).join('');
-      if (!cur && accounts.length) {
-        retSel.value = accounts[0].id;
-        retSel.dispatchEvent(new Event('change'));
-      } else if (cur) {
-        retSel.dispatchEvent(new Event('change'));
-      }
-    }
-  }
-
-  // ---- Retention account selector ----
-  document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('retention-account-select').addEventListener('change', function() {
-      const id = this.value;
-      if (id) {
-        htmx.ajax('GET', `/fragments/retention/${id}`, { target: '#retention-panel', swap: 'innerHTML' });
-      } else {
-        document.getElementById('retention-panel').innerHTML = '';
-      }
-    });
-  });
-
   // ---- HX-Trigger event handlers ----
   document.body.addEventListener('showToast', function(e) {
     const { message, type } = e.detail || {};
@@ -736,18 +677,6 @@
     document.getElementById('oauth-step-1').classList.remove('done');
   });
 
-  // Populate account selects when prompts/retention pages become active
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const page = item.dataset.page;
-      if (page === 'prompts' || page === 'retention' || page === 'accounts') {
-        _loadAccountOptions();
-      }
-    });
-  });
-
-  // Initial load of account selects for prompts page (active on load)
-  _loadAccountOptions();
 </script>
 </body>
 </html>
