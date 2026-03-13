@@ -540,8 +540,7 @@ def frag_create_prompt():
     _ensure_label_for_accounts(int(account_id) if account_id else None, label_name)
     scope = f"account {account_id}" if account_id else "all accounts"
     db.add_log("INFO", f"Prompt created: {name} → label '{label_name}' ({scope})")
-    account_id_filter = f.get("filter_account_id", "")
-    prompts = db.list_prompts(account_id=int(account_id_filter)) if account_id_filter else db.list_prompts()
+    prompts = db.list_prompts()
     accounts = _safe_accounts(db.list_accounts())
     return fragment_response("fragments/prompts_list.html",
                              {"prompts": prompts, "accounts": accounts},
@@ -718,9 +717,11 @@ def frag_set_retention(account_id):
         unit = f.get("unit", "days")
         days = value * 365 if unit == "years" else value
         if days < 1:
-            pass
-        else:
-            db.set_global_retention(account_id, days)
+            return fragment_response("fragments/retention_panel.html",
+                                     {"retention": db.get_retention(account_id),
+                                      "account_id": account_id, "gmail_labels": []},
+                                     toast={"message": "Days must be at least 1.", "type": "error"})
+        db.set_global_retention(account_id, days)
     else:
         db.clear_global_retention(account_id)
     retention = db.get_retention(account_id)
@@ -746,11 +747,13 @@ def frag_add_label_retention(account_id):
     value = f.get("value", "")
     unit = f.get("unit", "days")
     if not label_name or not value:
-        pass
-    else:
-        days = int(value) * 365 if unit == "years" else int(value)
-        if days >= 1:
-            db.add_label_retention(account_id, label_name, days)
+        return fragment_response("fragments/retention_panel.html",
+                                 {"retention": db.get_retention(account_id),
+                                  "account_id": account_id, "gmail_labels": []},
+                                 toast={"message": "Label and days are required.", "type": "error"})
+    days = int(value) * 365 if unit == "years" else int(value)
+    if days >= 1:
+        db.add_label_retention(account_id, label_name, days)
     retention = db.get_retention(account_id)
     account = db.get_account(account_id)
     try:
