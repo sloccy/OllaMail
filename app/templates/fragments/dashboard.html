@@ -1,8 +1,8 @@
-<div class="stats-row">
-  <div class="stat stat-blue"><div class="stat-label">Accounts</div><div class="stat-value accent">{{ accounts|length }}</div></div>
-  <div class="stat stat-green"><div class="stat-label">Active Prompts</div><div class="stat-value accent">{{ active_prompts }}</div></div>
-  <div class="stat stat-muted"><div class="stat-label">Poll Interval</div><div class="stat-value">{{ poll_interval }}</div></div>
-  <div class="stat stat-green"><div class="stat-label">Next Scan</div><div class="stat-value green">{{ next_scan }}</div></div>
+<div class="row g-3 mb-4">
+  <div class="col"><div class="card stat stat-blue"><div class="card-body p-3"><div class="text-uppercase small text-body-secondary mb-2" style="letter-spacing:0.09em;">Accounts</div><div class="font-monospace fs-4 fw-medium accent">{{ accounts|length }}</div></div></div></div>
+  <div class="col"><div class="card stat stat-green"><div class="card-body p-3"><div class="text-uppercase small text-body-secondary mb-2" style="letter-spacing:0.09em;">Active Prompts</div><div class="font-monospace fs-4 fw-medium accent">{{ active_prompts }}</div></div></div></div>
+  <div class="col"><div class="card stat stat-muted"><div class="card-body p-3"><div class="text-uppercase small text-body-secondary mb-2" style="letter-spacing:0.09em;">Poll Interval</div><div class="font-monospace fs-4 fw-medium">{{ poll_interval }}</div></div></div></div>
+  <div class="col"><div class="card stat stat-green"><div class="card-body p-3"><div class="text-uppercase small text-body-secondary mb-2" style="letter-spacing:0.09em;">Next Scan</div><div class="font-monospace fs-4 fw-medium green">{{ next_scan }}</div></div></div></div>
 </div>
 <script>
   (function(){
@@ -15,5 +15,5 @@
     {% endif %}
   })();
 </script>
-<div class="form-title">Recent Activity</div>
+<h6 class="text-uppercase text-body-secondary small fw-semibold border-bottom pb-2 mb-3">Recent Activity</h6>
 {% include 'fragments/logs_list.html' %}

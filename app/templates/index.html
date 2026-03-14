@@ -1,191 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OllaMail</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #080a0f; --surface: #0e1117; --surface2: #151b25;
-      --border: #1e2535; --border2: #28334a;
-      --text: #e2e8f4; --muted: #4d5f7a; --muted2: #283348;
-      --accent: #4a9eff; --accent-dim: rgba(74,158,255,0.08); --accent-glow: rgba(74,158,255,0.18);
-      --green: #22c55e; --red: #ef4444; --blue: #4a9eff;
-      --mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
-      --sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    html, body { height: 100%; font-size: 14px; }
     .layout { display: flex; height: 100vh; overflow: hidden; }
-
-    /* Sidebar */
-    .sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px 0; }
-    .logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-    .logo img { width: 100%; max-width: 160px; height: auto; display: block; }
-    .nav { flex: 1; }
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500; border-left: 2px solid transparent; transition: color 0.15s, border-color 0.15s, background 0.15s; user-select: none; border-radius: 0 6px 6px 0; margin-right: 8px; }
-    .nav-item:hover { color: var(--text); background: var(--surface2); }
-    .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-dim); box-shadow: inset 0 0 0 1px rgba(74,158,255,0.08); }
-    .nav-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.7; flex-shrink: 0; }
-    .nav-item.active .nav-icon { opacity: 1; }
-    .sidebar-footer { padding: 16px 20px 0; border-top: 1px solid var(--border); }
-    .status-pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
-    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted2); transition: background 0.3s; }
-    .status-dot.active { background: var(--green); box-shadow: 0 0 8px rgba(34,197,94,0.6); }
-
-    /* Main */
+    .sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 0; }
+    .sidebar-logo { padding: 0 16px 20px; }
+    .sidebar-logo img { width: 100%; max-width: 160px; height: auto; display: block; }
+    .sidebar-nav { flex: 1; }
+    .sidebar-footer { padding: 12px 16px 0; }
+    .nav-link { border-left: 2px solid transparent; border-radius: 0 6px 6px 0; margin-right: 8px; font-size: 13px; }
+    .nav-link.active { border-left-color: var(--bs-primary); }
+    .nav-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bs-secondary-bg); transition: background 0.3s; display: inline-block; }
+    .status-dot.active { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.6); }
     .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
     .page { display: none; flex-direction: column; flex: 1; padding: 32px 36px; animation: fadeIn 0.2s ease; }
     .page.active { display: flex; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
-    .page-title { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
-    .page-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
-
-    /* Buttons */
-    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border: none; border-radius: 7px; font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s; text-decoration: none; }
-    .btn:active { transform: scale(0.97); }
-    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 2px 12px rgba(74,158,255,0.25); }
-    .btn-primary:hover { opacity: 0.9; box-shadow: 0 4px 18px rgba(74,158,255,0.38); }
-    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
-    .btn-ghost:hover { border-color: var(--muted); background: var(--border2); }
-    .btn-danger { background: transparent; color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
-    .btn-danger:hover { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.5); }
-    .btn-sm { padding: 5px 11px; font-size: 12px; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
-
-    /* Cards */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-bottom: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
-    .card:hover { border-color: var(--border2); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-    .card-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-    .card-title { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
-    .card-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 8px; }
-    .card-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
-    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; font-family: var(--mono); }
-    .badge-green { background: rgba(34,197,94,0.12); color: var(--green); }
-    .badge-muted { background: var(--surface2); color: var(--muted); }
-    .badge-accent { background: rgba(74,158,255,0.12); color: var(--accent); }
-    .badge-stop { background: rgba(239,68,68,0.1); color: var(--red); }
-    .tag { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: 11.5px; font-family: var(--mono); background: rgba(74,158,255,0.1); color: var(--accent); border: 1px solid rgba(74,158,255,0.2); }
-
-    /* Forms */
-    .form-group { margin-bottom: 14px; }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .form-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-    label { display: block; font-size: 12.5px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
-    input[type="text"], input[type="number"], textarea, select { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px; color: var(--text); font-family: var(--sans); font-size: 13.5px; padding: 9px 12px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
-    input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,158,255,0.12); }
-    select option { background: var(--surface2); }
-    textarea { resize: vertical; min-height: 80px; }
-    .form-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
-
-    /* Panel */
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px; margin-bottom: 20px; display: none; }
-    .panel.open { display: block; animation: fadeIn 0.2s ease; }
-    .panel-title { font-size: 13.5px; font-weight: 600; margin-bottom: 18px; color: var(--accent); }
-
-    /* Actions */
-    .actions-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
-    .action-item { display: flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 8px 12px; cursor: pointer; transition: border-color 0.15s; }
-    .action-item:hover { border-color: var(--muted); }
-    .action-item input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
-    .action-item label { font-size: 12.5px; font-weight: 500; cursor: pointer; margin: 0; color: var(--text); }
-
     /* Drag */
-    .drag-handle { cursor: grab; color: var(--muted2); font-size: 16px; padding: 0 8px 0 0; flex-shrink: 0; user-select: none; margin-top: 2px; }
+    .drag-handle { cursor: grab; color: var(--bs-secondary-color); font-size: 16px; padding: 0 8px 0 0; flex-shrink: 0; user-select: none; margin-top: 2px; }
     .drag-handle:active { cursor: grabbing; }
-    .card.dragging { opacity: 0.4; border-color: var(--accent); }
-    .card.drag-over { border-color: var(--accent); border-style: dashed; }
-
-    /* Stop processing */
-    .stop-processing-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-    .stop-processing-row input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--red); cursor: pointer; }
-    .stop-processing-row label { font-size: 12.5px; font-weight: 500; cursor: pointer; margin: 0; color: var(--text); }
-
-    /* Filter bar */
-    .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-    .filter-bar select { width: auto; min-width: 220px; }
-    .filter-bar label { margin: 0; white-space: nowrap; }
-
-    /* OAuth steps */
-    .oauth-step { display: flex; gap: 14px; margin-bottom: 20px; }
-    .oauth-step-num { width: 26px; height: 26px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border2); font-family: var(--mono); font-size: 11px; display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
-    .oauth-step-body { flex: 1; }
-    .oauth-step-label { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
-    .oauth-step-desc { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
-    .oauth-step.done .oauth-step-num { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: var(--green); }
-    .url-box { font-family: var(--mono); font-size: 11.5px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 10px 12px; word-break: break-all; color: var(--accent); line-height: 1.6; margin-bottom: 10px; display: none; }
-    .url-box.visible { display: block; }
-
+    .card.dragging { opacity: 0.4; border-color: var(--bs-primary) !important; }
+    .card.drag-over { border-color: var(--bs-primary) !important; border-style: dashed !important; }
     /* Logs */
-    .log-list { font-family: var(--mono); font-size: 12px; }
-    .log-entry { display: grid; grid-template-columns: 160px 50px 1fr; gap: 12px; padding: 7px 0 7px 10px; border-bottom: 1px solid var(--border); border-left: 3px solid var(--muted2); align-items: start; }
+    .log-list { font-family: var(--bs-font-monospace); font-size: 12px; }
+    .log-entry { display: grid; grid-template-columns: 160px 50px 1fr; gap: 12px; padding: 7px 0 7px 10px; border-bottom: 1px solid var(--bs-border-color); border-left: 3px solid var(--bs-secondary-bg); align-items: start; }
     .log-entry:last-child { border-bottom: none; }
-    .log-entry.INFO { border-left-color: var(--blue); }
-    .log-entry.ERROR { border-left-color: var(--red); }
-    .log-entry.DEBUG { border-left-color: var(--muted2); }
-    .log-time { color: var(--muted); }
+    .log-entry.INFO { border-left-color: var(--bs-primary); }
+    .log-entry.ERROR { border-left-color: var(--bs-danger); }
+    .log-entry.DEBUG { border-left-color: var(--bs-secondary-bg); }
     .log-level { font-weight: 500; }
-    .log-level.INFO { color: var(--blue); }
-    .log-level.ERROR { color: var(--red); }
-    .log-level.DEBUG { color: var(--muted); }
-    .log-msg { color: var(--text); word-break: break-word; }
-
-    /* Settings */
-    .settings-grid { max-width: 520px; }
-    .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); }
-    .setting-label { font-weight: 500; font-size: 13.5px; }
-    .setting-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .setting-control { flex-shrink: 0; margin-left: 20px; }
-    .setting-control input { width: 100px; text-align: right; }
-
+    .log-level.INFO { color: var(--bs-primary); }
+    .log-level.ERROR { color: var(--bs-danger); }
+    .log-level.DEBUG { color: var(--bs-secondary-color); }
+    .log-msg { word-break: break-word; }
     /* Stats */
-    .stats-row { display: flex; gap: 14px; margin-bottom: 28px; }
-    .stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; position: relative; overflow: hidden; border-top: 2px solid var(--muted2); }
-    .stat.stat-blue { border-top-color: var(--blue); }
-    .stat.stat-green { border-top-color: var(--green); }
-    .stat.stat-muted { border-top-color: var(--muted); }
-    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 8px; }
-    .stat-value { font-family: var(--mono); font-size: 24px; font-weight: 500; }
-    .stat-value.accent { color: var(--accent); text-shadow: 0 0 20px rgba(74,158,255,0.3); }
-    .stat-value.green { color: var(--green); text-shadow: 0 0 20px rgba(34,197,94,0.3); }
-
-    /* Misc */
-    .empty { padding: 40px 0; text-align: center; color: var(--muted); font-size: 13px; }
-    .empty-icon { font-size: 28px; margin-bottom: 10px; opacity: 0.4; }
-    .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-    .alert { padding: 12px 16px; border-radius: 7px; font-size: 13px; margin-bottom: 18px; line-height: 1.6; }
-    .alert-error { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: var(--red); }
-    .alert-success { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); color: var(--green); }
-
-    /* History */
-    .history-filters { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 20px; align-items: flex-end; }
-    .history-filters .form-group { margin: 0; }
-    .history-filters input[type="text"], .history-filters select { width: auto; min-width: 170px; }
-    .history-count { font-size: 12px; color: var(--muted); margin-bottom: 12px; font-family: var(--mono); }
-    .history-table-wrap { overflow-x: auto; }
-    .history-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    .history-table th { text-align: left; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; padding: 0 16px 10px 0; border-bottom: 1px solid var(--border); font-weight: 500; white-space: nowrap; }
-    .history-table td { padding: 10px 16px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text); }
-    .history-table tr:last-child td { border-bottom: none; }
-    .history-table .col-time { width: 130px; color: var(--muted); font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
-    .history-table .col-account { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 11.5px; }
-    .history-table .col-subject { min-width: 160px; word-break: break-word; }
-    .history-table .col-sender { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
-    .history-table .col-rule { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .history-table .col-label { width: 120px; }
-    .history-table .col-actions { width: 110px; }
-    .history-table tbody tr:hover td { background: var(--surface2); }
-
-    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border2); border-radius: 9px; padding: 12px 18px; font-size: 13px; box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03); transform: translateY(80px); opacity: 0; transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; z-index: 999; max-width: 340px; }
+    .stat { border-top: 2px solid var(--bs-secondary-color); }
+    .stat.stat-blue { border-top-color: var(--bs-primary); }
+    .stat.stat-green { border-top-color: #22c55e; }
+    .stat.stat-muted { border-top-color: var(--bs-secondary-color); }
+    .stat-value.accent { color: var(--bs-primary); }
+    .stat-value.green { color: #22c55e; }
+    /* History columns */
+    .col-time { width: 130px; font-family: var(--bs-font-monospace); font-size: 11.5px; white-space: nowrap; }
+    .col-account { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--bs-font-monospace); font-size: 11.5px; }
+    .col-subject { min-width: 160px; word-break: break-word; }
+    .col-sender { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .col-rule { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .col-label { width: 120px; }
+    .col-actions { width: 110px; }
+    /* OAuth */
+    .oauth-step-num { width: 26px; height: 26px; border-radius: 50%; font-family: var(--bs-font-monospace); font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .url-box { display: none; }
+    .url-box.visible { display: block; }
+    /* Toast */
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: 9px; padding: 12px 18px; font-size: 13px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); transform: translateY(80px); opacity: 0; transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; z-index: 999; max-width: 340px; }
     #toast.show { transform: translateY(0); opacity: 1; }
-    #toast.success { border-color: rgba(34,197,94,0.4); box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 16px rgba(34,197,94,0.12); }
-    #toast.error { border-color: rgba(239,68,68,0.4); box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 16px rgba(239,68,68,0.12); }
+    #toast.success { border-color: rgba(34,197,94,0.4); }
+    #toast.error { border-color: rgba(239,68,68,0.4); }
+    /* Builder */
     @keyframes pulse-border { 0%, 100% { box-shadow: 0 2px 12px rgba(74,158,255,0.25); } 50% { box-shadow: 0 0 0 3px rgba(74,158,255,0.35), 0 2px 18px rgba(74,158,255,0.4); } }
     .btn-generating { animation: pulse-border 1.2s ease-in-out infinite; }
     .htmx-indicator { opacity: 0; transition: opacity 0.2s; }
@@ -194,22 +76,22 @@
 </head>
 <body>
 <div class="layout">
-  <aside class="sidebar">
-    <div class="logo">
+  <aside class="sidebar bg-body-secondary border-end">
+    <div class="sidebar-logo border-bottom mb-3 pb-3">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="OllaMail">
     </div>
-    <nav class="nav">
-      <div class="nav-item active" data-page="dashboard" onclick="setActivePage('dashboard', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span> Dashboard</div>
-      <div class="nav-item" data-page="accounts" onclick="setActivePage('accounts', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke-linecap="round"/></svg></span> Accounts</div>
-      <div class="nav-item" data-page="prompts" onclick="setActivePage('prompts', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h5.5l6.5 6.5-5 5L2.5 7V2z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg></span> Prompts</div>
-      <div class="nav-item" data-page="builder" onclick="setActivePage('builder', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14l8-8" stroke-linecap="round"/><path d="M10.5 2l1.2 2.3 2.3 1.2-2.3 1.2-1.2 2.3-1.2-2.3-2.3-1.2 2.3-1.2z" fill="currentColor" stroke="none"/></svg></span> Builder</div>
-      <div class="nav-item" data-page="settings" onclick="setActivePage('settings', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3" stroke-linecap="round"/></svg></span> Settings</div>
-      <div class="nav-item" data-page="logs" onclick="setActivePage('logs', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6" stroke-linecap="round"/></svg></span> Logs</div>
-      <div class="nav-item" data-page="history" onclick="setActivePage('history', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> History</div>
-      <div class="nav-item" data-page="retention" onclick="setActivePage('retention', this)"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v7h10V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5h4" stroke-linecap="round"/></svg></span> Retention</div>
+    <nav class="sidebar-nav nav flex-column nav-pills">
+      <a class="nav-link active d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="dashboard" onclick="setActivePage('dashboard', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span> Dashboard</a>
+      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="accounts" onclick="setActivePage('accounts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke-linecap="round"/></svg></span> Accounts</a>
+      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="prompts" onclick="setActivePage('prompts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h5.5l6.5 6.5-5 5L2.5 7V2z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg></span> Prompts</a>
+      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="builder" onclick="setActivePage('builder', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14l8-8" stroke-linecap="round"/><path d="M10.5 2l1.2 2.3 2.3 1.2-2.3 1.2-1.2 2.3-1.2-2.3-2.3-1.2 2.3-1.2z" fill="currentColor" stroke="none"/></svg></span> Builder</a>
+      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="settings" onclick="setActivePage('settings', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3" stroke-linecap="round"/></svg></span> Settings</a>
+      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="logs" onclick="setActivePage('logs', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6" stroke-linecap="round"/></svg></span> Logs</a>
+      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="history" onclick="setActivePage('history', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> History</a>
+      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="retention" onclick="setActivePage('retention', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v7h10V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5h4" stroke-linecap="round"/></svg></span> Retention</a>
     </nav>
-    <div class="sidebar-footer">
-      <div class="status-pill">
+    <div class="sidebar-footer mt-auto pt-3 border-top">
+      <div class="d-inline-flex align-items-center gap-1 font-monospace small text-body-secondary">
         <span class="status-dot" id="pollerDot"></span>
         <span id="pollerLabel">idle</span>
       </div>
@@ -220,9 +102,9 @@
 
     <!-- Dashboard -->
     <div class="page active" id="page-dashboard">
-      <div class="page-header">
-        <div><div class="page-title">Dashboard</div><div class="page-sub">Overview of your email scanning setup</div></div>
-        <button class="btn btn-ghost"
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div><h2 class="h5 fw-semibold mb-0">Dashboard</h2><div class="small text-body-secondary">Overview of your email scanning setup</div></div>
+        <button class="btn btn-outline-secondary btn-sm"
           hx-post="/fragments/scan"
           hx-swap="none">&#9654; Scan Now</button>
       </div>
@@ -230,53 +112,53 @@
         hx-get="/fragments/dashboard"
         hx-trigger="load, every 30s"
         hx-swap="innerHTML">
-        <div class="empty"><div class="empty-icon">&#9670;</div>Loading…</div>
+        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
       </div>
     </div>
 
     <!-- Accounts -->
     <div class="page" id="page-accounts">
-      <div class="page-header">
-        <div><div class="page-title">Accounts</div><div class="page-sub">Gmail accounts being monitored</div></div>
-        <button class="btn btn-primary" onclick="document.getElementById('add-account-panel').classList.toggle('open')">+ Add Account</button>
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div><h2 class="h5 fw-semibold mb-0">Accounts</h2><div class="small text-body-secondary">Gmail accounts being monitored</div></div>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-account-panel').classList.toggle('d-none')">+ Add Account</button>
       </div>
-      <div class="panel" id="add-account-panel">
-        <div class="panel-title">Connect a Gmail Account</div>
+      <div class="card p-4 mb-4 d-none" id="add-account-panel">
+        <h6 class="text-primary mb-3">Connect a Gmail Account</h6>
         <div>
-          <div class="oauth-step" id="oauth-step-1">
-            <div class="oauth-step-num">1</div>
-            <div class="oauth-step-body">
-              <div class="oauth-step-label">Generate authorization link</div>
-              <div class="oauth-step-desc">Click below to generate a Google authorization URL.</div>
-              <button class="btn btn-primary"
+          <div class="d-flex gap-3 mb-4" id="oauth-step-1">
+            <div class="oauth-step-num bg-body-secondary border font-monospace text-primary">1</div>
+            <div class="flex-grow-1">
+              <div class="fw-medium mb-2">Generate authorization link</div>
+              <div class="small text-body-secondary mb-2 lh-lg">Click below to generate a Google authorization URL.</div>
+              <button class="btn btn-primary btn-sm"
                 hx-post="/fragments/oauth/start"
                 hx-target="#oauth-step-2-body"
                 hx-swap="innerHTML"
                 hx-on:htmx:after-request="if(event.detail.successful) document.getElementById('oauth-step-1').classList.add('done')">Generate Link</button>
             </div>
           </div>
-          <div class="oauth-step" id="oauth-step-2">
-            <div class="oauth-step-num">2</div>
+          <div class="d-flex gap-3 mb-4" id="oauth-step-2">
+            <div class="oauth-step-num bg-body-secondary border font-monospace text-primary">2</div>
             <div id="oauth-step-2-body">
-              <div class="oauth-step-body">
-                <div class="oauth-step-label">Open the link and approve access</div>
-                <div class="oauth-step-desc">Click "Generate Link" first.</div>
+              <div class="flex-grow-1">
+                <div class="fw-medium mb-2">Open the link and approve access</div>
+                <div class="small text-body-secondary mb-2 lh-lg">Click "Generate Link" first.</div>
               </div>
             </div>
           </div>
-          <div class="oauth-step" id="oauth-step-3">
-            <div class="oauth-step-num">3</div>
-            <div class="oauth-step-body">
-              <div class="oauth-step-label">Paste the redirect URL</div>
-              <div class="oauth-step-desc">After approving, your browser will redirect to <code style="font-family:var(--mono);font-size:11.5px;background:var(--surface2);padding:1px 5px;border-radius:3px;">http://localhost/?code=...</code> which fails to load. Copy the full URL from your address bar and paste it here.</div>
+          <div class="d-flex gap-3 mb-4" id="oauth-step-3">
+            <div class="oauth-step-num bg-body-secondary border font-monospace text-primary">3</div>
+            <div class="flex-grow-1">
+              <div class="fw-medium mb-2">Paste the redirect URL</div>
+              <div class="small text-body-secondary mb-2 lh-lg">After approving, your browser will redirect to <code class="font-monospace">http://localhost/?code=...</code> which fails to load. Copy the full URL from your address bar and paste it here.</div>
               <form hx-post="/fragments/oauth/exchange"
                     hx-target="#accounts-list"
                     hx-swap="innerHTML">
-                <div class="form-group">
-                  <input type="text" name="url" id="oauth-redirect-url" placeholder="http://localhost/?state=...&code=..." style="font-family:var(--mono);font-size:12px;">
+                <div class="mb-3">
+                  <input type="text" class="form-control form-control-sm font-monospace" name="url" id="oauth-redirect-url" placeholder="http://localhost/?state=...&code=...">
                 </div>
-                <button type="submit" class="btn btn-primary">Connect Account</button>
-                <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-account-panel').classList.toggle('open')" style="margin-left:8px;">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm">Connect Account</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="document.getElementById('add-account-panel').classList.toggle('d-none')">Cancel</button>
               </form>
             </div>
           </div>
@@ -286,76 +168,76 @@
         hx-get="/fragments/accounts"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="empty"><div class="empty-icon">&#9670;</div>Loading…</div>
+        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
       </div>
     </div>
 
     <!-- Prompts -->
     <div class="page" id="page-prompts">
-      <div class="page-header">
-        <div><div class="page-title">Prompts</div><div class="page-sub">Rules the AI uses to decide which labels to apply</div></div>
-        <div style="display:flex;gap:10px;">
-          <button class="btn btn-ghost" onclick="exportPrompts()" id="btn-export">&#8595; Export</button>
-          <button class="btn btn-primary" onclick="document.getElementById('add-prompt-panel').classList.toggle('open')">+ Add Prompt</button>
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div><h2 class="h5 fw-semibold mb-0">Prompts</h2><div class="small text-body-secondary">Rules the AI uses to decide which labels to apply</div></div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" onclick="exportPrompts()" id="btn-export">&#8595; Export</button>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-prompt-panel').classList.toggle('d-none')">+ Add Prompt</button>
         </div>
       </div>
 
       <!-- Filter bar -->
-      <div class="filter-bar">
-        <label style="color:var(--muted);font-size:12.5px;">Show rules for:</label>
-        <select id="prompt-filter-account" name="account_id"
+      <div class="d-flex align-items-center gap-3 mb-4">
+        <label class="form-label mb-0 text-body-secondary small text-nowrap">Show rules for:</label>
+        <select class="form-select form-select-sm w-auto" id="prompt-filter-account" name="account_id"
           hx-get="/fragments/account-options?type=filter"
           hx-trigger="load"
           hx-swap="innerHTML">
         </select>
       </div>
 
-      <div class="panel" id="add-prompt-panel">
-        <div class="panel-title">New Labeling Rule</div>
+      <div class="card p-4 mb-4 d-none" id="add-prompt-panel">
+        <h6 class="text-primary mb-3">New Labeling Rule</h6>
         <form hx-post="/fragments/prompts"
               hx-target="#prompts-list"
               hx-swap="innerHTML"
-              hx-on:htmx:after-request="if(event.detail.successful){ this.reset(); document.getElementById('add-prompt-panel').classList.remove('open'); }">
-          <div class="form-row">
-            <div class="form-group">
-              <label>Rule name</label>
-              <input type="text" name="name" placeholder="e.g. Urgent emails">
+              hx-on:htmx:after-request="if(event.detail.successful){ this.reset(); document.getElementById('add-prompt-panel').classList.add('d-none'); }">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Rule name</label>
+              <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Urgent emails">
             </div>
-            <div class="form-group">
-              <label>Gmail label to apply</label>
-              <input type="text" name="label_name" placeholder="e.g. AI/Urgent">
-              <div class="form-hint">Label will be created in Gmail if it doesn't exist.</div>
+            <div class="col-md-6">
+              <label class="form-label">Gmail label to apply</label>
+              <input type="text" class="form-control form-control-sm" name="label_name" placeholder="e.g. AI/Urgent">
+              <div class="form-text">Label will be created in Gmail if it doesn't exist.</div>
             </div>
           </div>
-          <div class="form-group">
-            <label>Apply to account</label>
-            <select name="account_id" id="new-prompt-account"
+          <div class="mb-3">
+            <label class="form-label">Apply to account</label>
+            <select class="form-select form-select-sm" name="account_id" id="new-prompt-account"
               hx-get="/fragments/account-options?type=new-prompt"
               hx-trigger="load"
               hx-swap="innerHTML">
             </select>
-            <div class="form-hint">Global rules run on every account. Account-specific rules only run for that account.</div>
+            <div class="form-text">Global rules run on every account. Account-specific rules only run for that account.</div>
           </div>
-          <div class="form-group">
-            <label>Instructions for the AI</label>
-            <textarea name="instructions" id="new-prompt-instructions" rows="3" placeholder="Describe what kind of emails should get this label. Be specific."></textarea>
+          <div class="mb-3">
+            <label class="form-label">Instructions for the AI</label>
+            <textarea class="form-control form-control-sm" name="instructions" id="new-prompt-instructions" rows="3" placeholder="Describe what kind of emails should get this label. Be specific."></textarea>
           </div>
-          <div class="form-group">
-            <label>Actions when matched</label>
-            <div class="actions-grid">
-              <div class="action-item"><input type="checkbox" name="action_archive" value="1" id="new-action-archive"><label for="new-action-archive">Archive</label></div>
-              <div class="action-item"><input type="checkbox" name="action_spam" value="1" id="new-action-spam"><label for="new-action-spam">Send to Spam</label></div>
-              <div class="action-item"><input type="checkbox" name="action_trash" value="1" id="new-action-trash"><label for="new-action-trash">Trash</label></div>
-              <div class="action-item"><input type="checkbox" name="action_mark_read" value="1" id="new-action-mark-read"><label for="new-action-mark-read">Mark as Read</label></div>
+          <div class="mb-3">
+            <label class="form-label">Actions when matched</label>
+            <div class="d-flex flex-wrap gap-2 mt-1">
+              <div class="d-flex align-items-center gap-2 border rounded px-2 py-2"><input type="checkbox" name="action_archive" value="1" id="new-action-archive"><label class="mb-0" for="new-action-archive">Archive</label></div>
+              <div class="d-flex align-items-center gap-2 border rounded px-2 py-2"><input type="checkbox" name="action_spam" value="1" id="new-action-spam"><label class="mb-0" for="new-action-spam">Send to Spam</label></div>
+              <div class="d-flex align-items-center gap-2 border rounded px-2 py-2"><input type="checkbox" name="action_trash" value="1" id="new-action-trash"><label class="mb-0" for="new-action-trash">Trash</label></div>
+              <div class="d-flex align-items-center gap-2 border rounded px-2 py-2"><input type="checkbox" name="action_mark_read" value="1" id="new-action-mark-read"><label class="mb-0" for="new-action-mark-read">Mark as Read</label></div>
             </div>
           </div>
-          <div class="stop-processing-row">
+          <div class="d-flex align-items-center gap-2 border-top pt-3 mb-3">
             <input type="checkbox" name="stop_processing" value="1" id="new-stop-processing">
-            <label for="new-stop-processing">Stop processing further rules if this one matches</label>
+            <label class="mb-0" for="new-stop-processing">Stop processing further rules if this one matches</label>
           </div>
-          <div style="display:flex;gap:10px;margin-top:14px;">
-            <button type="submit" class="btn btn-primary">Save Rule</button>
-            <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-prompt-panel').classList.toggle('open')">Cancel</button>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">Save Rule</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('add-prompt-panel').classList.toggle('d-none')">Cancel</button>
           </div>
         </form>
       </div>
@@ -365,78 +247,79 @@
         hx-trigger="load, change from:#prompt-filter-account"
         hx-include="#prompt-filter-account"
         hx-swap="innerHTML">
-        <div class="empty"><div class="empty-icon">&#9670;</div>Loading…</div>
+        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
       </div>
     </div>
 
     <!-- Builder -->
     <div class="page" id="page-builder">
-      <div class="page-header">
-        <div><div class="page-title">Prompt Builder</div><div class="page-sub">Describe what to filter — AI drafts the rule instruction</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div><h2 class="h5 fw-semibold mb-0">Prompt Builder</h2><div class="small text-body-secondary">Describe what to filter — AI drafts the rule instruction</div></div>
       </div>
       <div style="max-width:600px;">
-        <div class="form-group">
-          <label>Describe the emails you want to label</label>
-          <textarea id="builder-description" rows="4" placeholder="e.g. Promotional emails and newsletters from online stores that I didn't explicitly sign up for..."></textarea>
+        <div class="mb-3">
+          <label class="form-label">Describe the emails you want to label</label>
+          <textarea class="form-control" id="builder-description" rows="4" placeholder="e.g. Promotional emails and newsletters from online stores that I didn't explicitly sign up for..."></textarea>
         </div>
-        <button class="btn btn-primary" id="btn-generate" onclick="generatePrompt()">&#9670; Generate Instruction</button>
+        <button class="btn btn-primary btn-sm" id="btn-generate" onclick="generatePrompt()">&#9670; Generate Instruction</button>
 
         <div id="builder-result" style="display:none;margin-top:28px;">
-          <hr class="divider">
+          <hr>
           <div id="builder-sse-container" hx-ext="sse" sse-close="done">
-            <div id="builder-thinking-wrap" style="margin-bottom:18px;">
-              <div style="font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:6px;letter-spacing:0.05em;">&#9670; THINKING</div>
+            <div id="builder-thinking-wrap" class="mb-4">
+              <div class="font-monospace small text-body-secondary mb-2" style="font-size:11px;letter-spacing:0.05em;">&#9670; THINKING</div>
               <div id="builder-thinking" sse-swap="think" hx-swap="beforeend"
-                style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12px;font-family:var(--mono);color:var(--muted);white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6;"></div>
+                class="bg-body-tertiary border rounded p-3 font-monospace text-body-secondary"
+                style="font-size:12px;white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6;"></div>
             </div>
-            <div class="form-title">Generated instruction</div>
-            <div class="form-group">
-              <textarea id="builder-instruction" rows="5" sse-swap="content" hx-swap="beforeend"></textarea>
-              <div class="form-hint">Edit if needed, then send it to the Prompts page.</div>
+            <h6 class="text-uppercase text-body-secondary small fw-semibold border-bottom pb-2 mb-3">Generated instruction</h6>
+            <div class="mb-3">
+              <textarea class="form-control" id="builder-instruction" rows="5" sse-swap="content" hx-swap="beforeend"></textarea>
+              <div class="form-text">Edit if needed, then send it to the Prompts page.</div>
             </div>
           </div>
-          <button class="btn btn-ghost" id="btn-use-prompt" disabled onclick="useBuilderInstruction()">&#8599; Use this prompt</button>
+          <button class="btn btn-outline-secondary btn-sm" id="btn-use-prompt" disabled onclick="useBuilderInstruction()">&#8599; Use this prompt</button>
         </div>
       </div>
     </div>
 
     <!-- Settings -->
     <div class="page" id="page-settings">
-      <div class="page-header">
-        <div><div class="page-title">Settings</div><div class="page-sub">Configure scanning behavior</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div><h2 class="h5 fw-semibold mb-0">Settings</h2><div class="small text-body-secondary">Configure scanning behavior</div></div>
       </div>
-      <div class="settings-grid">
+      <div style="max-width:520px;">
         <div id="settings-container"
           hx-get="/fragments/settings"
           hx-trigger="load"
           hx-swap="innerHTML">
-          <div class="empty"><div class="empty-icon">&#9670;</div>Loading…</div>
+          <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
         </div>
       </div>
     </div>
 
     <!-- Logs -->
     <div class="page" id="page-logs">
-      <div class="page-header">
-        <div><div class="page-title">Logs</div><div class="page-sub">Last 100 events</div></div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost" onclick="(function(p){p.classList.toggle('open');if(p.classList.contains('open')){const now=new Date(),y=new Date(now-86400000),f=d=>new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);document.getElementById('log-dl-end').value=f(now);document.getElementById('log-dl-start').value=f(y);}})(document.getElementById('log-download-panel'))">&#8659; Download</button>
-          <button class="btn btn-ghost"
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div><h2 class="h5 fw-semibold mb-0">Logs</h2><div class="small text-body-secondary">Last 100 events</div></div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" onclick="(function(p){p.classList.toggle('d-none');if(!p.classList.contains('d-none')){const now=new Date(),y=new Date(now-86400000),f=d=>new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);document.getElementById('log-dl-end').value=f(now);document.getElementById('log-dl-start').value=f(y);}})(document.getElementById('log-download-panel'))">&#8659; Download</button>
+          <button class="btn btn-outline-secondary btn-sm"
             hx-get="/fragments/logs"
             hx-target="#logs-content"
             hx-swap="innerHTML">&#8635; Refresh</button>
         </div>
       </div>
-      <div class="panel" id="log-download-panel">
-        <div class="panel-title">Download Logs</div>
-        <div class="form-row" style="max-width:560px;margin-bottom:14px;">
-          <div class="form-group" style="margin:0;">
-            <label for="log-dl-start">From</label>
-            <input type="datetime-local" id="log-dl-start">
+      <div class="card p-4 mb-4 d-none" id="log-download-panel">
+        <h6 class="text-primary mb-3">Download Logs</h6>
+        <div class="row g-3 mb-3" style="max-width:560px;">
+          <div class="col-md-6">
+            <label class="form-label" for="log-dl-start">From</label>
+            <input type="datetime-local" class="form-control form-control-sm" id="log-dl-start">
           </div>
-          <div class="form-group" style="margin:0;">
-            <label for="log-dl-end">To</label>
-            <input type="datetime-local" id="log-dl-end">
+          <div class="col-md-6">
+            <label class="form-label" for="log-dl-end">To</label>
+            <input type="datetime-local" class="form-control form-control-sm" id="log-dl-end">
           </div>
         </div>
         <button class="btn btn-primary btn-sm" onclick="downloadLogs()">Download CSV</button>
@@ -445,23 +328,23 @@
         hx-get="/fragments/logs"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="empty"><div class="empty-icon">&#9670;</div>Loading…</div>
+        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
       </div>
     </div>
 
     <!-- Categorization History -->
     <div class="page" id="page-history">
-      <div class="page-header">
-        <div><div class="page-title">Categorization History</div><div class="page-sub">Emails recently labeled by your rules</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div><h2 class="h5 fw-semibold mb-0">Categorization History</h2><div class="small text-body-secondary">Emails recently labeled by your rules</div></div>
       </div>
-      <form id="hist-filter-form" class="history-filters"
+      <form id="hist-filter-form" class="d-flex flex-wrap gap-3 mb-4 align-items-end"
         hx-get="/fragments/history/filters"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="empty"><div class="empty-icon">&#9670;</div>Loading…</div>
+        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
       </form>
-      <div class="history-table-wrap">
-        <table class="history-table">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle">
           <thead>
             <tr>
               <th class="col-time">Time</th>
@@ -477,7 +360,7 @@
             hx-get="/fragments/history"
             hx-trigger="load"
             hx-swap="innerHTML">
-            <tr><td colspan="7"><div class="empty"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 10v6l4 3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>No history yet. Labels will appear here after emails are scanned.</div></td></tr>
+            <tr><td colspan="7"><div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 10v6l4 3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>No history yet. Labels will appear here after emails are scanned.</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -485,12 +368,12 @@
 
     <!-- Retention -->
     <div class="page" id="page-retention">
-      <div class="page-header">
-        <div><div class="page-title">Retention</div><div class="page-sub">Automatically move old emails to Trash</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div><h2 class="h5 fw-semibold mb-0">Retention</h2><div class="small text-body-secondary">Automatically move old emails to Trash</div></div>
       </div>
-      <div class="filter-bar" style="margin-bottom:24px;">
-        <label>Account</label>
-        <select id="retention-account-select" name="account_id"
+      <div class="d-flex align-items-center gap-3 mb-4">
+        <label class="form-label mb-0">Account</label>
+        <select class="form-select form-select-sm w-auto" id="retention-account-select" name="account_id"
           hx-get="/fragments/account-options?type=retention"
           hx-trigger="load"
           hx-swap="innerHTML">
@@ -522,7 +405,7 @@
   // ---- Navigation ----
   function setActivePage(page, el) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
     el.classList.add('active');
   }
@@ -623,13 +506,13 @@
   function useBuilderInstruction() {
     const instruction = document.getElementById('builder-instruction').value.trim();
     if (!instruction) return;
-    const promptsNav = document.querySelector('.nav-item[data-page="prompts"]');
+    const promptsNav = document.querySelector('.nav-link[data-page="prompts"]');
     setActivePage('prompts', promptsNav);
     // Populate the add-prompt form after the prompts page content is ready
     const list = document.getElementById('prompts-list');
     const doPopulate = () => {
       const panel = document.getElementById('add-prompt-panel');
-      if (!panel.classList.contains('open')) panel.classList.add('open');
+      if (panel.classList.contains('d-none')) panel.classList.remove('d-none');
       const ta = document.getElementById('new-prompt-instructions');
       if (ta) { ta.value = instruction; ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     };
@@ -670,10 +553,10 @@
   });
 
   document.body.addEventListener('closeOAuthPanel', function() {
-    document.getElementById('add-account-panel').classList.remove('open');
+    document.getElementById('add-account-panel').classList.add('d-none');
     // Reset step 2 back to placeholder
     document.getElementById('oauth-step-2-body').innerHTML =
-      '<div class="oauth-step-body"><div class="oauth-step-label">Open the link and approve access</div><div class="oauth-step-desc">Click "Generate Link" first.</div></div>';
+      '<div class="flex-grow-1"><div class="fw-medium mb-2">Open the link and approve access</div><div class="small text-body-secondary mb-2 lh-lg">Click "Generate Link" first.</div></div>';
     document.getElementById('oauth-step-1').classList.remove('done');
   });
 
