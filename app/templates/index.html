@@ -10,6 +10,12 @@
   <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
   <style>
+    :root[data-bs-theme="dark"] {
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+      --card-shadow-hover: 0 4px 16px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.3);
+      --sidebar-hover-bg: rgba(255,255,255,0.05);
+      --sidebar-active-bg: rgba(255,255,255,0.08);
+    }
     html, body { height: 100%; font-size: 14px; }
     .layout { display: flex; height: 100vh; overflow: hidden; }
     .sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 0; }
@@ -17,8 +23,9 @@
     .sidebar-logo img { width: 100%; max-width: 160px; height: auto; display: block; }
     .sidebar-nav { flex: 1; }
     .sidebar-footer { padding: 12px 16px 0; }
-    .nav-link { border-left: 2px solid transparent; border-radius: 0 6px 6px 0; margin-right: 8px; font-size: 13px; }
-    .nav-link.active { border-left-color: var(--bs-primary); }
+    .nav-link { border-left: 2px solid transparent; border-radius: 0 6px 6px 0; margin-right: 8px; font-size: 13px; transition: background 0.15s ease, color 0.15s ease; }
+    .nav-link:hover { background: var(--sidebar-hover-bg) !important; color: var(--bs-body-color) !important; }
+    .nav-link.active { border-left-color: var(--bs-primary); background: var(--sidebar-active-bg); font-weight: 500; }
     .nav-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bs-secondary-bg); transition: background 0.3s; display: inline-block; }
     .status-dot.active { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.6); }
@@ -26,6 +33,10 @@
     .page { display: none; flex-direction: column; flex: 1; padding: 32px 36px; animation: fadeIn 0.2s ease; }
     .page.active { display: flex; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    /* Cards */
+    .card { box-shadow: var(--card-shadow); }
+    /* Buttons */
+    .btn-primary { font-weight: 500; }
     /* Drag */
     .drag-handle { cursor: grab; color: var(--bs-secondary-color); font-size: 16px; padding: 0 8px 0 0; flex-shrink: 0; user-select: none; margin-top: 2px; }
     .drag-handle:active { cursor: grabbing; }
@@ -33,7 +44,8 @@
     .card.drag-over { border-color: var(--bs-primary) !important; border-style: dashed !important; }
     /* Logs */
     .log-list { font-family: var(--bs-font-monospace); font-size: 12px; }
-    .log-entry { display: grid; grid-template-columns: 160px 50px 1fr; gap: 12px; padding: 7px 0 7px 10px; border-bottom: 1px solid var(--bs-border-color); border-left: 3px solid var(--bs-secondary-bg); align-items: start; }
+    .log-entry { display: grid; grid-template-columns: 160px 50px 1fr; gap: 12px; padding: 7px 0 7px 10px; border-bottom: 1px solid var(--bs-border-color-translucent); border-left: 3px solid var(--bs-secondary-bg); align-items: start; border-radius: 0 4px 4px 0; transition: background 0.1s; }
+    .log-entry:hover { background: var(--sidebar-hover-bg); }
     .log-entry:last-child { border-bottom: none; }
     .log-entry.INFO { border-left-color: var(--bs-primary); }
     .log-entry.ERROR { border-left-color: var(--bs-danger); }
@@ -44,12 +56,16 @@
     .log-level.DEBUG { color: var(--bs-secondary-color); }
     .log-msg { word-break: break-word; }
     /* Stats */
-    .stat { border-top: 2px solid var(--bs-secondary-color); }
-    .stat.stat-blue { border-top-color: var(--bs-primary); }
-    .stat.stat-green { border-top-color: #22c55e; }
-    .stat.stat-muted { border-top-color: var(--bs-secondary-color); }
+    .stat { border-left: 3px solid var(--bs-secondary-color); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .stat:hover { transform: translateY(-1px); box-shadow: var(--card-shadow-hover); }
+    .stat.stat-blue { border-left-color: var(--bs-primary); }
+    .stat.stat-green { border-left-color: #22c55e; }
+    .stat.stat-muted { border-left-color: var(--bs-secondary-color); }
     .stat-value.accent { color: var(--bs-primary); }
     .stat-value.green { color: #22c55e; }
+    /* Settings rows */
+    .setting-row { transition: background 0.15s ease; }
+    .setting-row:hover { background: var(--sidebar-hover-bg); }
     /* History columns */
     .col-time { width: 130px; font-family: var(--bs-font-monospace); font-size: 11.5px; white-space: nowrap; }
     .col-account { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--bs-font-monospace); font-size: 11.5px; }
@@ -58,12 +74,17 @@
     .col-rule { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .col-label { width: 120px; }
     .col-actions { width: 110px; }
+    /* History table header */
+    .table thead th { text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.08em; font-weight: 600; color: var(--bs-secondary-color); }
     /* OAuth */
     .oauth-step-num { width: 26px; height: 26px; border-radius: 50%; font-family: var(--bs-font-monospace); font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
     .url-box { display: none; }
     .url-box.visible { display: block; }
+    /* Empty states */
+    .empty { text-align: center; color: var(--bs-secondary-color); padding: 2.5rem 0; }
+    .empty-icon { font-size: 2rem; opacity: 0.2; margin-bottom: 0.5rem; }
     /* Toast */
-    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: 9px; padding: 12px 18px; font-size: 13px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); transform: translateY(80px); opacity: 0; transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; z-index: 999; max-width: 340px; }
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: 9px; padding: 12px 18px; font-size: 13px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); backdrop-filter: blur(12px); transform: translateY(80px); opacity: 0; transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; z-index: 999; max-width: 340px; }
     #toast.show { transform: translateY(0); opacity: 1; }
     #toast.success { border-color: rgba(34,197,94,0.4); }
     #toast.error { border-color: rgba(239,68,68,0.4); }
@@ -102,8 +123,8 @@
 
     <!-- Dashboard -->
     <div class="page active" id="page-dashboard">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div><h2 class="h5 fw-semibold mb-0">Dashboard</h2><div class="small text-body-secondary">Overview of your email scanning setup</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
+        <div><h2 class="h5 fw-bold mb-1">Dashboard</h2><div class="small text-body-secondary">Overview of your email scanning setup</div></div>
         <button class="btn btn-outline-secondary btn-sm"
           hx-post="/fragments/scan"
           hx-swap="none">&#9654; Scan Now</button>
@@ -118,8 +139,8 @@
 
     <!-- Accounts -->
     <div class="page" id="page-accounts">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div><h2 class="h5 fw-semibold mb-0">Accounts</h2><div class="small text-body-secondary">Gmail accounts being monitored</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
+        <div><h2 class="h5 fw-bold mb-1">Accounts</h2><div class="small text-body-secondary">Gmail accounts being monitored</div></div>
         <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-account-panel').classList.toggle('d-none')">+ Add Account</button>
       </div>
       <div class="card p-4 mb-4 d-none" id="add-account-panel">
@@ -174,8 +195,8 @@
 
     <!-- Prompts -->
     <div class="page" id="page-prompts">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div><h2 class="h5 fw-semibold mb-0">Prompts</h2><div class="small text-body-secondary">Rules the AI uses to decide which labels to apply</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
+        <div><h2 class="h5 fw-bold mb-1">Prompts</h2><div class="small text-body-secondary">Rules the AI uses to decide which labels to apply</div></div>
         <div class="d-flex gap-2">
           <button class="btn btn-outline-secondary btn-sm" onclick="exportPrompts()" id="btn-export">&#8595; Export</button>
           <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-prompt-panel').classList.toggle('d-none')">+ Add Prompt</button>
@@ -225,10 +246,10 @@
           <div class="mb-3">
             <label class="form-label">Actions when matched</label>
             <div class="d-flex flex-wrap gap-2 mt-1">
-              <div class="d-flex align-items-center gap-2 border rounded px-2 py-2"><input type="checkbox" name="action_archive" value="1" id="new-action-archive"><label class="mb-0" for="new-action-archive">Archive</label></div>
-              <div class="d-flex align-items-center gap-2 border rounded px-2 py-2"><input type="checkbox" name="action_spam" value="1" id="new-action-spam"><label class="mb-0" for="new-action-spam">Send to Spam</label></div>
-              <div class="d-flex align-items-center gap-2 border rounded px-2 py-2"><input type="checkbox" name="action_trash" value="1" id="new-action-trash"><label class="mb-0" for="new-action-trash">Trash</label></div>
-              <div class="d-flex align-items-center gap-2 border rounded px-2 py-2"><input type="checkbox" name="action_mark_read" value="1" id="new-action-mark-read"><label class="mb-0" for="new-action-mark-read">Mark as Read</label></div>
+              <div class="d-flex align-items-center gap-2 bg-body-tertiary border border-secondary-subtle rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input" name="action_archive" value="1" id="new-action-archive"><label class="mb-0" for="new-action-archive">Archive</label></div>
+              <div class="d-flex align-items-center gap-2 bg-body-tertiary border border-secondary-subtle rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input" name="action_spam" value="1" id="new-action-spam"><label class="mb-0" for="new-action-spam">Send to Spam</label></div>
+              <div class="d-flex align-items-center gap-2 bg-body-tertiary border border-secondary-subtle rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input" name="action_trash" value="1" id="new-action-trash"><label class="mb-0" for="new-action-trash">Trash</label></div>
+              <div class="d-flex align-items-center gap-2 bg-body-tertiary border border-secondary-subtle rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input" name="action_mark_read" value="1" id="new-action-mark-read"><label class="mb-0" for="new-action-mark-read">Mark as Read</label></div>
             </div>
           </div>
           <div class="d-flex align-items-center gap-2 border-top pt-3 mb-3">
@@ -253,8 +274,8 @@
 
     <!-- Builder -->
     <div class="page" id="page-builder">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div><h2 class="h5 fw-semibold mb-0">Prompt Builder</h2><div class="small text-body-secondary">Describe what to filter — AI drafts the rule instruction</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
+        <div><h2 class="h5 fw-bold mb-1">Prompt Builder</h2><div class="small text-body-secondary">Describe what to filter — AI drafts the rule instruction</div></div>
       </div>
       <div style="max-width:600px;">
         <div class="mb-3">
@@ -285,8 +306,8 @@
 
     <!-- Settings -->
     <div class="page" id="page-settings">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div><h2 class="h5 fw-semibold mb-0">Settings</h2><div class="small text-body-secondary">Configure scanning behavior</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
+        <div><h2 class="h5 fw-bold mb-1">Settings</h2><div class="small text-body-secondary">Configure scanning behavior</div></div>
       </div>
       <div style="max-width:520px;">
         <div id="settings-container"
@@ -300,8 +321,8 @@
 
     <!-- Logs -->
     <div class="page" id="page-logs">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div><h2 class="h5 fw-semibold mb-0">Logs</h2><div class="small text-body-secondary">Last 100 events</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
+        <div><h2 class="h5 fw-bold mb-1">Logs</h2><div class="small text-body-secondary">Last 100 events</div></div>
         <div class="d-flex gap-2">
           <button class="btn btn-outline-secondary btn-sm" onclick="(function(p){p.classList.toggle('d-none');if(!p.classList.contains('d-none')){const now=new Date(),y=new Date(now-86400000),f=d=>new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);document.getElementById('log-dl-end').value=f(now);document.getElementById('log-dl-start').value=f(y);}})(document.getElementById('log-download-panel'))">&#8659; Download</button>
           <button class="btn btn-outline-secondary btn-sm"
@@ -334,8 +355,8 @@
 
     <!-- Categorization History -->
     <div class="page" id="page-history">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div><h2 class="h5 fw-semibold mb-0">Categorization History</h2><div class="small text-body-secondary">Emails recently labeled by your rules</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
+        <div><h2 class="h5 fw-bold mb-1">Categorization History</h2><div class="small text-body-secondary">Emails recently labeled by your rules</div></div>
       </div>
       <form id="hist-filter-form" class="d-flex flex-wrap gap-3 mb-4 align-items-end"
         hx-get="/fragments/history/filters"
@@ -368,8 +389,8 @@
 
     <!-- Retention -->
     <div class="page" id="page-retention">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div><h2 class="h5 fw-semibold mb-0">Retention</h2><div class="small text-body-secondary">Automatically move old emails to Trash</div></div>
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
+        <div><h2 class="h5 fw-bold mb-1">Retention</h2><div class="small text-body-secondary">Automatically move old emails to Trash</div></div>
       </div>
       <div class="d-flex align-items-center gap-3 mb-4">
         <label class="form-label mb-0">Account</label>
