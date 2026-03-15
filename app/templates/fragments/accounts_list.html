@@ -1,6 +1,6 @@
 {% if accounts %}
   {% for a in accounts %}
-  <div class="card mb-3" style="border-left: 3px solid {% if a.active %}#22c55e{% else %}var(--bs-secondary-color){% endif %};">
+  <div class="card account-card mb-3{% if a.active %} active{% endif %}">
     <div class="card-body">
       <div class="d-flex align-items-start justify-content-between gap-3">
         <div>
