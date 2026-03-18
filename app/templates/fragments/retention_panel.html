@@ -9,29 +9,29 @@
 {% endif %}
 
 <!-- Global rule -->
-<div class="card mb-4">
+<div class="card u-mb-4">
   <div class="card-body">
-    <h6 class="text-uppercase text-body-secondary small fw-semibold border-bottom pb-2 mb-3">Global Retention</h6>
+    <h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Global Retention</h6>
     <form hx-post="/fragments/retention/{{ account_id }}"
           hx-target="#retention-panel"
           hx-swap="innerHTML">
-      <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
+      <div class="u-flex u-items-center u-justify-between u-py-3 border-b">
         <div>
-          <div class="fw-medium">Delete all emails older than</div>
-          <div class="small text-body-secondary mt-1">Emails in any folder older than this will be moved to Trash on each scan. Leave disabled to skip.</div>
+          <div class="font-medium">Delete all emails older than</div>
+          <div class="text-sm u-text-muted u-mt-1">Emails in any folder older than this will be moved to Trash on each scan. Leave disabled to skip.</div>
         </div>
-        <div class="flex-shrink-0 ms-4 d-flex align-items-center gap-2">
-          <input type="checkbox" class="form-check-input" name="enabled" value="1" id="retention-global-enabled"
+        <div class="u-flex-shrink-0 u-ml-4 u-flex u-items-center u-gap-2">
+          <input type="checkbox" class="checkbox" name="enabled" value="1" id="retention-global-enabled"
             {% if global_enabled %}checked{% endif %}
             onchange="var v=document.getElementById('rg-value'),u=document.getElementById('rg-unit');v.disabled=!this.checked;u.disabled=!this.checked;if(!this.checked){v.value='';u.value='days';}">
-          <input type="number" class="form-control form-control-sm" name="value" id="rg-value" min="1" step="1" placeholder="1" style="width:70px;text-align:right;" value="{{ g_value }}" {% if not global_enabled %}disabled{% endif %}>
-          <select class="form-select form-select-sm" name="unit" id="rg-unit" style="width:90px;" {% if not global_enabled %}disabled{% endif %}>
+          <input type="number" class="input input-sm" name="value" id="rg-value" min="1" step="1" placeholder="1" style="width:70px;text-align:right;" value="{{ g_value }}" {% if not global_enabled %}disabled{% endif %}>
+          <select class="select select-sm" name="unit" id="rg-unit" style="width:90px;" {% if not global_enabled %}disabled{% endif %}>
             <option value="days" {% if g_unit == 'days' %}selected{% endif %}>days</option>
             <option value="years" {% if g_unit == 'years' %}selected{% endif %}>years</option>
           </select>
         </div>
       </div>
-      <div class="mt-3">
+      <div class="u-mt-3">
         <button type="submit" class="btn btn-primary btn-sm">Save</button>
       </div>
     </form>
@@ -39,19 +39,19 @@
 </div>
 
 <!-- Never delete -->
-<div class="card mb-4">
+<div class="card u-mb-4">
   <div class="card-body">
-    <h6 class="text-uppercase text-body-secondary small fw-semibold border-bottom pb-2 mb-3">Never Delete</h6>
-    <div class="small text-body-secondary mb-3">Emails with these labels will never be deleted by any retention rule.</div>
+    <h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Never Delete</h6>
+    <div class="text-sm u-text-muted u-mb-3">Emails with these labels will never be deleted by any retention rule.</div>
     <div id="label-exemptions-list">
       {% if retention.exemptions %}
         {% for ex in retention.exemptions %}
-        <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+        <div class="u-flex u-items-center u-justify-between u-py-2 border-b">
           <div>
-            <span class="badge text-bg-primary border border-primary-subtle font-monospace">{{ ex.label_name|e }}</span>
-            <span class="small text-body-secondary ms-2">never deleted</span>
+            <span class="badge badge-primary border u-border-primary-subtle font-mono">{{ ex.label_name|e }}</span>
+            <span class="text-sm u-text-muted u-ml-2">never deleted</span>
           </div>
-          <button class="btn btn-outline-danger btn-sm"
+          <button class="btn btn-outline btn-error btn-sm"
             hx-delete="/fragments/retention/{{ account_id }}/exemptions/{{ ex.id }}"
             hx-target="#retention-panel"
             hx-swap="innerHTML"
@@ -59,8 +59,8 @@
         </div>
         {% endfor %}
       {% else %}
-        <div class="text-center text-body-secondary py-3">
-          <div class="fs-3 opacity-25 mb-2"><svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="24" height="6" rx="1"/><path d="M6 12v14h20V12"/><path d="M12 18h8" stroke-linecap="round"/></svg></div>
+        <div class="text-center u-text-muted u-py-3">
+          <div class="u-text-2xl opacity-25 u-mb-2"><svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="24" height="6" rx="1"/><path d="M6 12v14h20V12"/><path d="M12 18h8" stroke-linecap="round"/></svg></div>
           No exemptions yet.
         </div>
       {% endif %}
@@ -69,10 +69,10 @@
     <form hx-post="/fragments/retention/{{ account_id }}/exemptions"
           hx-target="#retention-panel"
           hx-swap="innerHTML"
-          class="d-flex gap-2 align-items-end flex-wrap">
-      <div class="mb-0 flex-grow-1" style="min-width:180px;">
+          class="u-flex u-gap-2 u-items-end u-flex-wrap">
+      <div class="u-mb-0 u-flex-grow" style="min-width:180px;">
         <label class="form-label">Gmail label</label>
-        <select class="form-select form-select-sm" name="label_name">
+        <select class="select select-sm" name="label_name">
           <option value="">Select a label…</option>
           {% set taken = retention.exemptions|map(attribute='label_name')|map('lower')|list %}
           {% set taken_rules = retention.labels|map(attribute='label_name')|map('lower')|list %}
@@ -83,7 +83,7 @@
           {% endfor %}
         </select>
       </div>
-      <button type="submit" class="btn btn-outline-secondary btn-sm flex-shrink-0">Never Delete</button>
+      <button type="submit" class="btn btn-outline btn-secondary btn-sm u-flex-shrink-0">Never Delete</button>
     </form>
   </div>
 </div>
@@ -91,18 +91,18 @@
 <!-- Label rules -->
 <div class="card">
   <div class="card-body">
-    <h6 class="text-uppercase text-body-secondary small fw-semibold border-bottom pb-2 mb-3">Label-Specific Retention</h6>
+    <h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Label-Specific Retention</h6>
     <div id="label-retention-list">
       {% if retention.labels %}
         {% for rule in retention.labels %}
-        <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+        <div class="u-flex u-items-center u-justify-between u-py-2 border-b">
           <div>
-            <span class="badge text-bg-primary border border-primary-subtle font-monospace">{{ rule.label_name|e }}</span>
-            <span class="small text-body-secondary ms-2">→ trash after
+            <span class="badge badge-primary border u-border-primary-subtle font-mono">{{ rule.label_name|e }}</span>
+            <span class="text-sm u-text-muted u-ml-2">→ trash after
               <strong>{{ rule.days|fmtretention }}</strong>
             </span>
           </div>
-          <button class="btn btn-outline-danger btn-sm"
+          <button class="btn btn-outline btn-error btn-sm"
             hx-delete="/fragments/retention/{{ account_id }}/labels/{{ rule.id }}"
             hx-target="#retention-panel"
             hx-swap="innerHTML"
@@ -110,8 +110,8 @@
         </div>
         {% endfor %}
       {% else %}
-        <div class="text-center text-body-secondary py-3">
-          <div class="fs-3 opacity-25 mb-2"><svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="24" height="6" rx="1"/><path d="M6 12v14h20V12"/><path d="M12 18h8" stroke-linecap="round"/></svg></div>
+        <div class="text-center u-text-muted u-py-3">
+          <div class="u-text-2xl opacity-25 u-mb-2"><svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="24" height="6" rx="1"/><path d="M6 12v14h20V12"/><path d="M12 18h8" stroke-linecap="round"/></svg></div>
           No label rules yet.
         </div>
       {% endif %}
@@ -120,10 +120,10 @@
     <form hx-post="/fragments/retention/{{ account_id }}/labels"
           hx-target="#retention-panel"
           hx-swap="innerHTML"
-          class="d-flex gap-2 align-items-end flex-wrap">
-      <div class="flex-grow-1" style="min-width:180px;">
+          class="u-flex u-gap-2 u-items-end u-flex-wrap">
+      <div class="u-flex-grow" style="min-width:180px;">
         <label class="form-label">Gmail label</label>
-        <select class="form-select form-select-sm" name="label_name">
+        <select class="select select-sm" name="label_name">
           <option value="">Select a label…</option>
           {% set taken_rules = retention.labels|map(attribute='label_name')|map('lower')|list %}
           {% set taken_ex = retention.exemptions|map(attribute='label_name')|map('lower')|list %}
@@ -136,16 +136,16 @@
       </div>
       <div style="width:80px;">
         <label class="form-label">Delete after</label>
-        <input type="number" class="form-control form-control-sm" name="value" min="1" step="1" placeholder="1">
+        <input type="number" class="input input-sm" name="value" min="1" step="1" placeholder="1">
       </div>
       <div style="width:100px;">
         <label class="form-label">&nbsp;</label>
-        <select class="form-select form-select-sm" name="unit">
+        <select class="select select-sm" name="unit">
           <option value="days">days</option>
           <option value="years">years</option>
         </select>
       </div>
-      <button type="submit" class="btn btn-primary btn-sm flex-shrink-0">Add Rule</button>
+      <button type="submit" class="btn btn-primary btn-sm u-flex-shrink-0">Add Rule</button>
     </form>
   </div>
 </div>
