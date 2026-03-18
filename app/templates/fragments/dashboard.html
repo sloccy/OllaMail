@@ -1,20 +1,20 @@
 <div class="stats stats-horizontal shadow w-full u-mb-4">
-  <div class="stat">
+  <div class="stat stat-accent-primary">
     <div class="stat-title">Accounts</div>
     <div class="stat-value text-primary font-mono">{{ accounts|length }}</div>
     <div class="stat-desc">Connected</div>
   </div>
-  <div class="stat">
+  <div class="stat stat-accent-success">
     <div class="stat-title">Active Prompts</div>
     <div class="stat-value text-success font-mono">{{ active_prompts }}</div>
     <div class="stat-desc">Rules running</div>
   </div>
-  <div class="stat">
+  <div class="stat stat-accent-neutral">
     <div class="stat-title">Poll Interval</div>
     <div class="stat-value font-mono text-2xl">{{ poll_interval }}</div>
     <div class="stat-desc">Between scans</div>
   </div>
-  <div class="stat">
+  <div class="stat stat-accent-success">
     <div class="stat-title">Next Scan</div>
     <div class="stat-value text-success font-mono text-2xl">{{ next_scan }}</div>
     <div class="stat-desc">Scheduled</div>
