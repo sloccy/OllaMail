@@ -1,6 +1,6 @@
-<div class="mb-0">
+<div class="u-mb-0">
   <label class="form-label">Account</label>
-  <select class="form-select form-select-sm" name="account_id" id="hist-filter-account"
+  <select class="select select-sm" name="account_id" id="hist-filter-account"
     hx-get="/fragments/history"
     hx-target="#hist-body"
     hx-swap="innerHTML"
@@ -12,9 +12,9 @@
     {% endfor %}
   </select>
 </div>
-<div class="mb-0">
+<div class="u-mb-0">
   <label class="form-label">Rule</label>
-  <select class="form-select form-select-sm" name="prompt_id" id="hist-filter-rule"
+  <select class="select select-sm" name="prompt_id" id="hist-filter-rule"
     hx-get="/fragments/history"
     hx-target="#hist-body"
     hx-swap="innerHTML"
@@ -26,18 +26,18 @@
     {% endfor %}
   </select>
 </div>
-<div class="mb-0">
+<div class="u-mb-0">
   <label class="form-label">Subject</label>
-  <input type="text" class="form-control form-control-sm" name="subject" id="hist-filter-subject" placeholder="Search subject…"
+  <input type="text" class="input input-sm" name="subject" id="hist-filter-subject" placeholder="Search subject…"
     hx-get="/fragments/history"
     hx-target="#hist-body"
     hx-swap="innerHTML"
     hx-trigger="input delay:350ms"
     hx-include="#hist-filter-form">
 </div>
-<div class="mb-0">
+<div class="u-mb-0">
   <label class="form-label">Sender</label>
-  <input type="text" class="form-control form-control-sm" name="sender" id="hist-filter-sender" placeholder="Search sender…"
+  <input type="text" class="input input-sm" name="sender" id="hist-filter-sender" placeholder="Search sender…"
     hx-get="/fragments/history"
     hx-target="#hist-body"
     hx-swap="innerHTML"

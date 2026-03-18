@@ -1,23 +1,23 @@
 {% if accounts %}
   {% for a in accounts %}
-  <div class="card account-card mb-3{% if a.active %} active{% endif %}">
+  <div class="card account-card u-mb-3{% if a.active %} active{% endif %}">
     <div class="card-body">
-      <div class="d-flex align-items-start justify-content-between gap-3">
+      <div class="u-flex u-items-start u-justify-between u-gap-3">
         <div>
-          <div class="fw-semibold mb-1">{{ a.email|e }}</div>
-          <div class="font-monospace small text-body-secondary mb-2">Added {{ a.added_at|fmtdate }} &middot; Last scanned {{ a.last_scan_at|fmtdate }}</div>
+          <div class="font-semibold u-mb-1">{{ a.email|e }}</div>
+          <div class="font-mono text-sm u-text-muted u-mb-2">Added {{ a.added_at|fmtdate }} &middot; Last scanned {{ a.last_scan_at|fmtdate }}</div>
           {% if a.active %}
-            <span class="badge text-bg-success">&#9679; active</span>
+            <span class="badge badge-success">&#9679; active</span>
           {% else %}
-            <span class="badge text-bg-secondary">paused</span>
+            <span class="badge badge-secondary">paused</span>
           {% endif %}
         </div>
-        <div class="d-flex gap-2 flex-shrink-0">
-          <button class="btn btn-outline-secondary btn-sm"
+        <div class="u-flex u-gap-2 u-flex-shrink-0">
+          <button class="btn btn-outline btn-secondary btn-sm"
             hx-post="/fragments/accounts/{{ a.id }}/toggle"
             hx-target="#accounts-list"
             hx-swap="innerHTML">{{ 'Pause' if a.active else 'Resume' }}</button>
-          <button class="btn btn-outline-danger btn-sm"
+          <button class="btn btn-outline btn-error btn-sm"
             hx-delete="/fragments/accounts/{{ a.id }}"
             hx-target="#accounts-list"
             hx-swap="innerHTML"
@@ -28,8 +28,8 @@
   </div>
   {% endfor %}
 {% else %}
-<div class="text-center text-body-secondary py-5">
-  <div class="fs-3 opacity-25 mb-2"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="11" r="6"/><path d="M4 28c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke-linecap="round"/></svg></div>
+<div class="text-center u-text-muted u-py-5">
+  <div class="u-text-2xl opacity-25 u-mb-2"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="11" r="6"/><path d="M4 28c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke-linecap="round"/></svg></div>
   No accounts added yet.
 </div>
 {% endif %}
