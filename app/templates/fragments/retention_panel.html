@@ -11,7 +11,7 @@
 <!-- Global rule -->
 <div class="card u-mb-4">
   <div class="card-body">
-    <h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Global Retention</h6>
+    <h6 class="section-title">Global Retention</h6>
     <form hx-post="/fragments/retention/{{ account_id }}"
           hx-target="#retention-panel"
           hx-swap="innerHTML">
@@ -21,7 +21,7 @@
           <div class="text-sm u-text-muted u-mt-1">Emails in any folder older than this will be moved to Trash on each scan. Leave disabled to skip.</div>
         </div>
         <div class="u-flex-shrink-0 u-ml-4 u-flex u-items-center u-gap-2">
-          <input type="checkbox" class="checkbox" name="enabled" value="1" id="retention-global-enabled"
+          <input type="checkbox" class="toggle toggle-primary toggle-sm" name="enabled" value="1" id="retention-global-enabled"
             {% if global_enabled %}checked{% endif %}
             onchange="var v=document.getElementById('rg-value'),u=document.getElementById('rg-unit');v.disabled=!this.checked;u.disabled=!this.checked;if(!this.checked){v.value='';u.value='days';}">
           <input type="number" class="input input-sm" name="value" id="rg-value" min="1" step="1" placeholder="1" style="width:70px;text-align:right;" value="{{ g_value }}" {% if not global_enabled %}disabled{% endif %}>
@@ -41,7 +41,7 @@
 <!-- Never delete -->
 <div class="card u-mb-4">
   <div class="card-body">
-    <h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Never Delete</h6>
+    <h6 class="section-title">Never Delete</h6>
     <div class="text-sm u-text-muted u-mb-3">Emails with these labels will never be deleted by any retention rule.</div>
     <div id="label-exemptions-list">
       {% if retention.exemptions %}
@@ -91,7 +91,7 @@
 <!-- Label rules -->
 <div class="card">
   <div class="card-body">
-    <h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Label-Specific Retention</h6>
+    <h6 class="section-title">Label-Specific Retention</h6>
     <div id="label-retention-list">
       {% if retention.labels %}
         {% for rule in retention.labels %}

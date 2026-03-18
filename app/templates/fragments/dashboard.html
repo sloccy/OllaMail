@@ -1,8 +1,24 @@
-<div class="u-grid u-grid-auto u-gap-3 u-mb-4">
-  <div><div class="card stat stat-blue"><div class="card-body u-p-3"><div class="uppercase text-sm u-text-muted u-mb-2" style="letter-spacing:0.09em;">Accounts</div><div class="font-mono u-text-2xl font-semibold accent">{{ accounts|length }}</div></div></div></div>
-  <div><div class="card stat stat-green"><div class="card-body u-p-3"><div class="uppercase text-sm u-text-muted u-mb-2" style="letter-spacing:0.09em;">Active Prompts</div><div class="font-mono u-text-2xl font-semibold accent">{{ active_prompts }}</div></div></div></div>
-  <div><div class="card stat stat-muted"><div class="card-body u-p-3"><div class="uppercase text-sm u-text-muted u-mb-2" style="letter-spacing:0.09em;">Poll Interval</div><div class="font-mono u-text-2xl font-semibold">{{ poll_interval }}</div></div></div></div>
-  <div><div class="card stat stat-green"><div class="card-body u-p-3"><div class="uppercase text-sm u-text-muted u-mb-2" style="letter-spacing:0.09em;">Next Scan</div><div class="font-mono u-text-2xl font-semibold green">{{ next_scan }}</div></div></div></div>
+<div class="stats stats-horizontal shadow w-full u-mb-4">
+  <div class="stat">
+    <div class="stat-title">Accounts</div>
+    <div class="stat-value text-primary font-mono">{{ accounts|length }}</div>
+    <div class="stat-desc">Connected</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Active Prompts</div>
+    <div class="stat-value text-success font-mono">{{ active_prompts }}</div>
+    <div class="stat-desc">Rules running</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Poll Interval</div>
+    <div class="stat-value font-mono text-2xl">{{ poll_interval }}</div>
+    <div class="stat-desc">Between scans</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Next Scan</div>
+    <div class="stat-value text-success font-mono text-2xl">{{ next_scan }}</div>
+    <div class="stat-desc">Scheduled</div>
+  </div>
 </div>
 <script>
   (function(){
@@ -15,5 +31,5 @@
     {% endif %}
   })();
 </script>
-<h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Recent Activity</h6>
+<h6 class="section-title">Recent Activity</h6>
 {% include 'fragments/logs_list.html' %}

@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="night">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OllaMail</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -13,19 +16,21 @@
 </head>
 <body>
 <div class="layout">
-  <aside class="sidebar bg-base-200 u-border-r">
+  <aside class="sidebar u-border-r">
     <div class="sidebar-logo border-b u-mb-3 u-pb-3">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="OllaMail">
     </div>
-    <nav class="sidebar-nav u-flex-col">
-      <a class="nav-link active u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="dashboard" onclick="setActivePage('dashboard', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span> Dashboard</a>
-      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="accounts" onclick="setActivePage('accounts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke-linecap="round"/></svg></span> Accounts</a>
-      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="prompts" onclick="setActivePage('prompts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h5.5l6.5 6.5-5 5L2.5 7V2z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg></span> Prompts</a>
-      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="builder" onclick="setActivePage('builder', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14l8-8" stroke-linecap="round"/><path d="M10.5 2l1.2 2.3 2.3 1.2-2.3 1.2-1.2 2.3-1.2-2.3-2.3-1.2 2.3-1.2z" fill="currentColor" stroke="none"/></svg></span> Builder</a>
-      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="settings" onclick="setActivePage('settings', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3" stroke-linecap="round"/></svg></span> Settings</a>
-      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="logs" onclick="setActivePage('logs', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6" stroke-linecap="round"/></svg></span> Logs</a>
-      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="history" onclick="setActivePage('history', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> History</a>
-      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="retention" onclick="setActivePage('retention', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v7h10V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5h4" stroke-linecap="round"/></svg></span> Retention</a>
+    <nav class="u-flex-grow">
+      <ul class="menu menu-sm px-2 gap-0.5">
+        <li><a class="active" data-page="dashboard" onclick="setActivePage('dashboard', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span> Dashboard</a></li>
+        <li><a data-page="accounts" onclick="setActivePage('accounts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke-linecap="round"/></svg></span> Accounts</a></li>
+        <li><a data-page="prompts" onclick="setActivePage('prompts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h5.5l6.5 6.5-5 5L2.5 7V2z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg></span> Prompts</a></li>
+        <li><a data-page="builder" onclick="setActivePage('builder', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14l8-8" stroke-linecap="round"/><path d="M10.5 2l1.2 2.3 2.3 1.2-2.3 1.2-1.2 2.3-1.2-2.3-2.3-1.2 2.3-1.2z" fill="currentColor" stroke="none"/></svg></span> Builder</a></li>
+        <li><a data-page="settings" onclick="setActivePage('settings', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3" stroke-linecap="round"/></svg></span> Settings</a></li>
+        <li><a data-page="logs" onclick="setActivePage('logs', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6" stroke-linecap="round"/></svg></span> Logs</a></li>
+        <li><a data-page="history" onclick="setActivePage('history', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> History</a></li>
+        <li><a data-page="retention" onclick="setActivePage('retention', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v7h10V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5h4" stroke-linecap="round"/></svg></span> Retention</a></li>
+      </ul>
     </nav>
     <div class="sidebar-footer u-mt-auto u-pt-3 border-t">
       <div class="u-inline-flex u-items-center u-gap-1 font-mono text-sm u-text-muted">
@@ -49,7 +54,18 @@
         hx-get="/fragments/dashboard"
         hx-trigger="load, every 30s"
         hx-swap="innerHTML">
-        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
+        <div class="flex flex-col gap-3 p-2">
+          <div class="flex gap-3">
+            <div class="skeleton h-20 flex-1 rounded-xl"></div>
+            <div class="skeleton h-20 flex-1 rounded-xl"></div>
+            <div class="skeleton h-20 flex-1 rounded-xl"></div>
+            <div class="skeleton h-20 flex-1 rounded-xl"></div>
+          </div>
+          <div class="skeleton h-4 w-32 mt-2"></div>
+          <div class="skeleton h-8 w-full"></div>
+          <div class="skeleton h-8 w-full"></div>
+          <div class="skeleton h-8 w-3/4"></div>
+        </div>
       </div>
     </div>
 
@@ -63,7 +79,7 @@
         <h6 class="text-primary u-mb-3">Connect a Gmail Account</h6>
         <div>
           <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-1">
-            <div class="oauth-step-num bg-base-200 border font-mono text-primary">1</div>
+            <div class="badge badge-primary badge-outline font-mono w-7 h-7 flex-shrink-0 mt-0.5">1</div>
             <div class="u-flex-grow">
               <div class="font-medium u-mb-2">Generate authorization link</div>
               <div class="text-sm u-text-muted u-mb-2 u-leading-relaxed">Click below to generate a Google authorization URL.</div>
@@ -75,7 +91,7 @@
             </div>
           </div>
           <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-2">
-            <div class="oauth-step-num bg-base-200 border font-mono text-primary">2</div>
+            <div class="badge badge-primary badge-outline font-mono w-7 h-7 flex-shrink-0 mt-0.5">2</div>
             <div id="oauth-step-2-body">
               <div class="u-flex-grow">
                 <div class="font-medium u-mb-2">Open the link and approve access</div>
@@ -84,7 +100,7 @@
             </div>
           </div>
           <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-3">
-            <div class="oauth-step-num bg-base-200 border font-mono text-primary">3</div>
+            <div class="badge badge-primary badge-outline font-mono w-7 h-7 flex-shrink-0 mt-0.5">3</div>
             <div class="u-flex-grow">
               <div class="font-medium u-mb-2">Paste the redirect URL</div>
               <div class="text-sm u-text-muted u-mb-2 u-leading-relaxed">After approving, your browser will redirect to <code class="font-mono">http://localhost/?code=...</code> which fails to load. Copy the full URL from your address bar and paste it here.</div>
@@ -105,7 +121,10 @@
         hx-get="/fragments/accounts"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
+        <div class="flex flex-col gap-3 p-2">
+          <div class="skeleton h-20 w-full rounded-xl"></div>
+          <div class="skeleton h-20 w-full rounded-xl"></div>
+        </div>
       </div>
     </div>
 
@@ -184,7 +203,11 @@
         hx-trigger="load, change from:#prompt-filter-account"
         hx-include="#prompt-filter-account"
         hx-swap="innerHTML">
-        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
+        <div class="flex flex-col gap-3 p-2">
+          <div class="skeleton h-24 w-full rounded-xl"></div>
+          <div class="skeleton h-24 w-full rounded-xl"></div>
+          <div class="skeleton h-24 w-3/4 rounded-xl"></div>
+        </div>
       </div>
     </div>
 
@@ -209,7 +232,7 @@
                 class="bg-base-300 border rounded u-p-3 font-mono u-text-muted"
                 style="font-size:12px;white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6;"></div>
             </div>
-            <h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Generated instruction</h6>
+            <h6 class="section-title">Generated instruction</h6>
             <div class="u-mb-3">
               <textarea class="textarea" id="builder-instruction" sse-swap="content" hx-swap="beforeend"></textarea>
               <div class="form-text">Edit if needed, then send it to the Prompts page.</div>
@@ -230,7 +253,11 @@
           hx-get="/fragments/settings"
           hx-trigger="load"
           hx-swap="innerHTML">
-          <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
+          <div class="flex flex-col gap-3 p-2">
+            <div class="skeleton h-10 w-full rounded-lg"></div>
+            <div class="skeleton h-10 w-full rounded-lg"></div>
+            <div class="skeleton h-10 w-3/4 rounded-lg"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -265,7 +292,13 @@
         hx-get="/fragments/logs"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
+        <div class="flex flex-col gap-2 p-2">
+          <div class="skeleton h-7 w-full"></div>
+          <div class="skeleton h-7 w-full"></div>
+          <div class="skeleton h-7 w-full"></div>
+          <div class="skeleton h-7 w-5/6"></div>
+          <div class="skeleton h-7 w-4/5"></div>
+        </div>
       </div>
     </div>
 
@@ -278,10 +311,14 @@
         hx-get="/fragments/history/filters"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
+        <div class="flex gap-3">
+          <div class="skeleton h-9 w-40 rounded-lg"></div>
+          <div class="skeleton h-9 w-40 rounded-lg"></div>
+          <div class="skeleton h-9 w-32 rounded-lg"></div>
+        </div>
       </form>
       <div class="u-overflow-x-auto">
-        <table class="table table-hover table-sm u-align-middle history-table">
+        <table class="table table-hover table-sm table-zebra u-align-middle history-table">
           <thead>
             <tr>
               <th class="col-time">Time</th>
@@ -326,23 +363,24 @@
   </main>
 </div>
 
-<div id="toast"></div>
+<div id="toast" class="toast toast-end z-50 transition-opacity duration-300 opacity-0 pointer-events-none"></div>
 
 <script>
   // ---- Toast ----
   let _toastTimer;
   function toast(msg, type = 'success') {
     const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.className = 'show ' + type;
+    const alertClass = type === 'error' ? 'alert-error' : type === 'warning' ? 'alert-warning' : 'alert-success';
+    el.innerHTML = `<div class="alert ${alertClass} shadow-lg text-sm">${msg}</div>`;
+    el.classList.remove('opacity-0', 'pointer-events-none');
     clearTimeout(_toastTimer);
-    _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+    _toastTimer = setTimeout(() => { el.classList.add('opacity-0', 'pointer-events-none'); }, 3500);
   }
 
   // ---- Navigation ----
   function setActivePage(page, el) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('[data-page]').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
     el.classList.add('active');
   }
@@ -443,7 +481,7 @@
   function useBuilderInstruction() {
     const instruction = document.getElementById('builder-instruction').value.trim();
     if (!instruction) return;
-    const promptsNav = document.querySelector('.nav-link[data-page="prompts"]');
+    const promptsNav = document.querySelector('[data-page="prompts"]');
     setActivePage('prompts', promptsNav);
     // Populate the add-prompt form after the prompts page content is ready
     const list = document.getElementById('prompts-list');
