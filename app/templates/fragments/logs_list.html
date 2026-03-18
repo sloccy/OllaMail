@@ -1,13 +1,19 @@
 {% if logs %}
-<div class="log-list">
+<ul class="timeline timeline-vertical timeline-compact">
   {% for l in logs %}
-  <div class="log-entry {{ l.level }}">
-    <span class="log-time">{{ l.timestamp|fmtdate }}</span>
-    <span class="log-level {{ l.level }}">{{ l.level }}</span>
-    <span class="log-msg">{{ l.message|e }}</span>
-  </div>
+  <li>
+    <div class="timeline-middle">
+      <span class="badge badge-xs {% if l.level == 'ERROR' %}badge-error{% elif l.level == 'INFO' %}badge-primary{% else %}badge-ghost{% endif %}"></span>
+    </div>
+    <div class="timeline-end font-mono text-xs py-1">
+      <span class="opacity-50 mr-2">{{ l.timestamp|fmtdate }}</span>
+      <span class="font-semibold mr-2 {% if l.level == 'ERROR' %}text-error{% elif l.level == 'INFO' %}text-primary{% else %}opacity-40{% endif %}">{{ l.level }}</span>
+      <span class="break-words">{{ l.message|e }}</span>
+    </div>
+    <hr class="opacity-10"/>
+  </li>
   {% endfor %}
-</div>
+</ul>
 {% else %}
 <div class="empty">
   <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 8h20M6 14h20M6 20h14" stroke-linecap="round"/></svg></div>
