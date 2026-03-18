@@ -1,120 +1,34 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OllaMail</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5/dist/full.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5/dist/themes.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
-  <style>
-    :root[data-bs-theme="dark"] {
-      --card-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
-      --card-shadow-hover: 0 4px 16px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.3);
-      --hover-subtle-bg: rgba(255,255,255,0.05);
-      --sidebar-active-bg: rgba(255,255,255,0.08);
-    }
-    html, body { height: 100%; font-size: 14px; }
-    .layout { display: flex; height: 100vh; overflow: hidden; }
-    .sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 0; }
-    .sidebar-logo { padding: 0 16px 20px; }
-    .sidebar-logo img { width: 100%; max-width: 160px; height: auto; display: block; margin: 0 auto; }
-    .sidebar-nav { flex: 1; }
-    .sidebar-footer { padding: 12px 16px 0; }
-    .nav-link { border-left: 2px solid transparent; border-radius: 0 6px 6px 0; margin-right: 8px; font-size: 13px; transition: background 0.15s ease, color 0.15s ease; }
-    .nav-link:hover { background: var(--hover-subtle-bg) !important; color: var(--bs-body-color) !important; }
-    .nav-link.active { border-left-color: var(--bs-primary); background: var(--sidebar-active-bg); font-weight: 500; }
-    .nav-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bs-secondary-bg); transition: background 0.3s; display: inline-block; }
-    .status-dot.active { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.6); }
-    .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
-    .page { display: none; flex-direction: column; flex: 1; padding: 32px 36px; animation: fadeIn 0.2s ease; }
-    .page.active { display: flex; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-    /* Cards */
-    .card { box-shadow: var(--card-shadow); }
-    .account-card { border-left: 3px solid var(--bs-secondary-color); }
-    .account-card.active { border-left-color: #22c55e; }
-    /* Buttons */
-    .btn-primary { font-weight: 500; }
-    /* Drag */
-    .drag-handle { cursor: grab; color: var(--bs-secondary-color); font-size: 16px; padding: 0 8px 0 0; flex-shrink: 0; user-select: none; margin-top: 2px; }
-    .drag-handle:active { cursor: grabbing; }
-    .card.dragging { opacity: 0.4; border-color: var(--bs-primary) !important; }
-    .card.drag-over { border-color: var(--bs-primary) !important; border-style: dashed !important; }
-    /* Logs */
-    .log-list { font-family: var(--bs-font-monospace); font-size: 12px; }
-    .log-entry { display: grid; grid-template-columns: 160px 50px 1fr; gap: 12px; padding: 7px 0 7px 10px; border-bottom: 1px solid var(--bs-border-color-translucent); border-left: 3px solid var(--bs-secondary-bg); align-items: start; border-radius: 0 4px 4px 0; transition: background 0.1s; }
-    .log-entry:hover { background: var(--hover-subtle-bg); }
-    .log-entry:last-child { border-bottom: none; }
-    .log-entry.INFO { border-left-color: var(--bs-primary); }
-    .log-entry.ERROR { border-left-color: var(--bs-danger); }
-    .log-entry.DEBUG { border-left-color: var(--bs-secondary-bg); }
-    .log-level { font-weight: 500; }
-    .log-level.INFO { color: var(--bs-primary); }
-    .log-level.ERROR { color: var(--bs-danger); }
-    .log-level.DEBUG { color: var(--bs-secondary-color); }
-    .log-msg { word-break: break-word; }
-    /* Stats */
-    .stat { border-left: 3px solid var(--bs-secondary-color); transition: transform 0.15s ease, box-shadow 0.15s ease; }
-    .stat:hover { transform: translateY(-1px); box-shadow: var(--card-shadow-hover); }
-    .stat.stat-blue { border-left-color: var(--bs-primary); }
-    .stat.stat-green { border-left-color: #22c55e; }
-    .stat.stat-muted { border-left-color: var(--bs-secondary-color); }
-    .stat-value.accent { color: var(--bs-primary); }
-    .stat-value.green { color: #22c55e; }
-    /* Settings rows */
-    .setting-row { transition: background 0.15s ease; }
-    .setting-row:hover { background: var(--hover-subtle-bg); }
-    /* History columns */
-    .col-time { width: 130px; font-family: var(--bs-font-monospace); font-size: 11.5px; white-space: nowrap; }
-    .col-account { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--bs-font-monospace); font-size: 11.5px; }
-    .col-subject { min-width: 160px; word-break: break-word; }
-    .col-sender { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-    .col-rule { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .col-label { width: 120px; }
-    .col-actions { width: 110px; }
-    /* History table header */
-    .table thead th { text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.08em; font-weight: 600; color: var(--bs-secondary-color); }
-    /* OAuth */
-    .oauth-step-num { width: 26px; height: 26px; border-radius: 50%; font-family: var(--bs-font-monospace); font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
-    .url-box { display: none; }
-    .url-box.visible { display: block; }
-    /* Empty states */
-    .empty { text-align: center; color: var(--bs-secondary-color); padding: 2.5rem 0; }
-    .empty-icon { font-size: 2rem; opacity: 0.2; margin-bottom: 0.5rem; }
-    /* Toast */
-    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: 9px; padding: 12px 18px; font-size: 13px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); transform: translateY(80px); opacity: 0; transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; z-index: 999; max-width: 340px; }
-    #toast.show { transform: translateY(0); opacity: 1; }
-    #toast.success { border-color: rgba(34,197,94,0.4); }
-    #toast.error { border-color: rgba(239,68,68,0.4); }
-    /* Builder */
-    @keyframes pulse-border { 0%, 100% { box-shadow: 0 2px 12px rgba(74,158,255,0.25); } 50% { box-shadow: 0 0 0 3px rgba(74,158,255,0.35), 0 2px 18px rgba(74,158,255,0.4); } }
-    .btn-generating { animation: pulse-border 1.2s ease-in-out infinite; }
-    .htmx-indicator { opacity: 0; transition: opacity 0.2s; }
-    .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
-  </style>
 </head>
 <body>
 <div class="layout">
-  <aside class="sidebar bg-body-secondary border-end">
-    <div class="sidebar-logo border-bottom mb-3 pb-3">
+  <aside class="sidebar bg-base-200 u-border-r">
+    <div class="sidebar-logo border-b u-mb-3 u-pb-3">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="OllaMail">
     </div>
-    <nav class="sidebar-nav nav flex-column nav-pills">
-      <a class="nav-link active d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="dashboard" onclick="setActivePage('dashboard', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span> Dashboard</a>
-      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="accounts" onclick="setActivePage('accounts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke-linecap="round"/></svg></span> Accounts</a>
-      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="prompts" onclick="setActivePage('prompts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h5.5l6.5 6.5-5 5L2.5 7V2z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg></span> Prompts</a>
-      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="builder" onclick="setActivePage('builder', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14l8-8" stroke-linecap="round"/><path d="M10.5 2l1.2 2.3 2.3 1.2-2.3 1.2-1.2 2.3-1.2-2.3-2.3-1.2 2.3-1.2z" fill="currentColor" stroke="none"/></svg></span> Builder</a>
-      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="settings" onclick="setActivePage('settings', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3" stroke-linecap="round"/></svg></span> Settings</a>
-      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="logs" onclick="setActivePage('logs', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6" stroke-linecap="round"/></svg></span> Logs</a>
-      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="history" onclick="setActivePage('history', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> History</a>
-      <a class="nav-link d-flex align-items-center gap-2 py-2 px-3 text-start" data-page="retention" onclick="setActivePage('retention', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v7h10V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5h4" stroke-linecap="round"/></svg></span> Retention</a>
+    <nav class="sidebar-nav u-flex-col">
+      <a class="nav-link active u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="dashboard" onclick="setActivePage('dashboard', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span> Dashboard</a>
+      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="accounts" onclick="setActivePage('accounts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke-linecap="round"/></svg></span> Accounts</a>
+      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="prompts" onclick="setActivePage('prompts', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h5.5l6.5 6.5-5 5L2.5 7V2z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg></span> Prompts</a>
+      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="builder" onclick="setActivePage('builder', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14l8-8" stroke-linecap="round"/><path d="M10.5 2l1.2 2.3 2.3 1.2-2.3 1.2-1.2 2.3-1.2-2.3-2.3-1.2 2.3-1.2z" fill="currentColor" stroke="none"/></svg></span> Builder</a>
+      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="settings" onclick="setActivePage('settings', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3" stroke-linecap="round"/></svg></span> Settings</a>
+      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="logs" onclick="setActivePage('logs', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6" stroke-linecap="round"/></svg></span> Logs</a>
+      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="history" onclick="setActivePage('history', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> History</a>
+      <a class="nav-link u-flex u-items-center u-gap-2 u-py-2 u-px-3" data-page="retention" onclick="setActivePage('retention', this)" href="#"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v7h10V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5h4" stroke-linecap="round"/></svg></span> Retention</a>
     </nav>
-    <div class="sidebar-footer mt-auto pt-3 border-top">
-      <div class="d-inline-flex align-items-center gap-1 font-monospace small text-body-secondary">
+    <div class="sidebar-footer u-mt-auto u-pt-3 border-t">
+      <div class="u-inline-flex u-items-center u-gap-1 font-mono text-sm u-text-muted">
         <span class="status-dot" id="pollerDot"></span>
         <span id="pollerLabel">idle</span>
       </div>
@@ -125,9 +39,9 @@
 
     <!-- Dashboard -->
     <div class="page active" id="page-dashboard">
-      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
-        <div><h2 class="h5 fw-bold mb-1">Dashboard</h2><div class="small text-body-secondary">Overview of your email scanning setup</div></div>
-        <button class="btn btn-outline-secondary btn-sm"
+      <div class="u-flex u-items-center u-justify-between u-mb-4 u-pb-3 border-b u-border-subtle">
+        <div><h2 class="font-bold u-mb-1">Dashboard</h2><div class="text-sm u-text-muted">Overview of your email scanning setup</div></div>
+        <button class="btn btn-outline btn-secondary btn-sm"
           hx-post="/fragments/scan"
           hx-swap="none">&#9654; Scan Now</button>
       </div>
@@ -135,24 +49,24 @@
         hx-get="/fragments/dashboard"
         hx-trigger="load, every 30s"
         hx-swap="innerHTML">
-        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
+        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
       </div>
     </div>
 
     <!-- Accounts -->
     <div class="page" id="page-accounts">
-      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
-        <div><h2 class="h5 fw-bold mb-1">Accounts</h2><div class="small text-body-secondary">Gmail accounts being monitored</div></div>
-        <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-account-panel').classList.toggle('d-none')">+ Add Account</button>
+      <div class="u-flex u-items-center u-justify-between u-mb-4 u-pb-3 border-b u-border-subtle">
+        <div><h2 class="font-bold u-mb-1">Accounts</h2><div class="text-sm u-text-muted">Gmail accounts being monitored</div></div>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-account-panel').classList.toggle('u-hidden')">+ Add Account</button>
       </div>
-      <div class="card p-4 mb-4 d-none" id="add-account-panel">
-        <h6 class="text-primary mb-3">Connect a Gmail Account</h6>
+      <div class="card u-p-4 u-mb-4 u-hidden" id="add-account-panel">
+        <h6 class="text-primary u-mb-3">Connect a Gmail Account</h6>
         <div>
-          <div class="d-flex gap-3 mb-4" id="oauth-step-1">
-            <div class="oauth-step-num bg-body-secondary border font-monospace text-primary">1</div>
-            <div class="flex-grow-1">
-              <div class="fw-medium mb-2">Generate authorization link</div>
-              <div class="small text-body-secondary mb-2 lh-lg">Click below to generate a Google authorization URL.</div>
+          <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-1">
+            <div class="oauth-step-num bg-base-200 border font-mono text-primary">1</div>
+            <div class="u-flex-grow">
+              <div class="font-medium u-mb-2">Generate authorization link</div>
+              <div class="text-sm u-text-muted u-mb-2 u-leading-relaxed">Click below to generate a Google authorization URL.</div>
               <button class="btn btn-primary btn-sm"
                 hx-post="/fragments/oauth/start"
                 hx-target="#oauth-step-2-body"
@@ -160,28 +74,28 @@
                 hx-on:htmx:after-request="if(event.detail.successful) document.getElementById('oauth-step-1').classList.add('done')">Generate Link</button>
             </div>
           </div>
-          <div class="d-flex gap-3 mb-4" id="oauth-step-2">
-            <div class="oauth-step-num bg-body-secondary border font-monospace text-primary">2</div>
+          <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-2">
+            <div class="oauth-step-num bg-base-200 border font-mono text-primary">2</div>
             <div id="oauth-step-2-body">
-              <div class="flex-grow-1">
-                <div class="fw-medium mb-2">Open the link and approve access</div>
-                <div class="small text-body-secondary mb-2 lh-lg">Click "Generate Link" first.</div>
+              <div class="u-flex-grow">
+                <div class="font-medium u-mb-2">Open the link and approve access</div>
+                <div class="text-sm u-text-muted u-mb-2 u-leading-relaxed">Click "Generate Link" first.</div>
               </div>
             </div>
           </div>
-          <div class="d-flex gap-3 mb-4" id="oauth-step-3">
-            <div class="oauth-step-num bg-body-secondary border font-monospace text-primary">3</div>
-            <div class="flex-grow-1">
-              <div class="fw-medium mb-2">Paste the redirect URL</div>
-              <div class="small text-body-secondary mb-2 lh-lg">After approving, your browser will redirect to <code class="font-monospace">http://localhost/?code=...</code> which fails to load. Copy the full URL from your address bar and paste it here.</div>
+          <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-3">
+            <div class="oauth-step-num bg-base-200 border font-mono text-primary">3</div>
+            <div class="u-flex-grow">
+              <div class="font-medium u-mb-2">Paste the redirect URL</div>
+              <div class="text-sm u-text-muted u-mb-2 u-leading-relaxed">After approving, your browser will redirect to <code class="font-mono">http://localhost/?code=...</code> which fails to load. Copy the full URL from your address bar and paste it here.</div>
               <form hx-post="/fragments/oauth/exchange"
                     hx-target="#accounts-list"
                     hx-swap="innerHTML">
-                <div class="mb-3">
-                  <input type="text" class="form-control form-control-sm font-monospace" name="url" id="oauth-redirect-url" placeholder="http://localhost/?state=...&code=...">
+                <div class="u-mb-3">
+                  <input type="text" class="input input-sm font-mono" name="url" id="oauth-redirect-url" placeholder="http://localhost/?state=...&code=...">
                 </div>
                 <button type="submit" class="btn btn-primary btn-sm">Connect Account</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="document.getElementById('add-account-panel').classList.toggle('d-none')">Cancel</button>
+                <button type="button" class="btn btn-outline btn-secondary btn-sm u-ml-2" onclick="document.getElementById('add-account-panel').classList.toggle('u-hidden')">Cancel</button>
               </form>
             </div>
           </div>
@@ -191,76 +105,76 @@
         hx-get="/fragments/accounts"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
+        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
       </div>
     </div>
 
     <!-- Prompts -->
     <div class="page" id="page-prompts">
-      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
-        <div><h2 class="h5 fw-bold mb-1">Prompts</h2><div class="small text-body-secondary">Rules the AI uses to decide which labels to apply</div></div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-secondary btn-sm" onclick="exportPrompts()" id="btn-export">&#8595; Export</button>
-          <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-prompt-panel').classList.toggle('d-none')">+ Add Prompt</button>
+      <div class="u-flex u-items-center u-justify-between u-mb-4 u-pb-3 border-b u-border-subtle">
+        <div><h2 class="font-bold u-mb-1">Prompts</h2><div class="text-sm u-text-muted">Rules the AI uses to decide which labels to apply</div></div>
+        <div class="u-flex u-gap-2">
+          <button class="btn btn-outline btn-secondary btn-sm" onclick="exportPrompts()" id="btn-export">&#8595; Export</button>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-prompt-panel').classList.toggle('u-hidden')">+ Add Prompt</button>
         </div>
       </div>
 
       <!-- Filter bar -->
-      <div class="d-flex align-items-center gap-3 mb-4">
-        <label class="form-label mb-0 text-body-secondary small text-nowrap">Show rules for:</label>
-        <select class="form-select form-select-sm w-auto" id="prompt-filter-account" name="account_id"
+      <div class="u-flex u-items-center u-gap-3 u-mb-4">
+        <label class="form-label u-mb-0 u-text-muted text-sm u-text-nowrap">Show rules for:</label>
+        <select class="select select-sm u-w-auto" id="prompt-filter-account" name="account_id"
           hx-get="/fragments/account-options?type=filter"
           hx-trigger="load"
           hx-swap="innerHTML">
         </select>
       </div>
 
-      <div class="card p-4 mb-4 d-none" id="add-prompt-panel">
-        <h6 class="text-primary mb-3">New Labeling Rule</h6>
+      <div class="card u-p-4 u-mb-4 u-hidden" id="add-prompt-panel">
+        <h6 class="text-primary u-mb-3">New Labeling Rule</h6>
         <form hx-post="/fragments/prompts"
               hx-target="#prompts-list"
               hx-swap="innerHTML"
-              hx-on:htmx:after-request="if(event.detail.successful){ this.reset(); document.getElementById('add-prompt-panel').classList.add('d-none'); }">
-          <div class="row g-3 mb-3">
-            <div class="col-md-6">
+              hx-on:htmx:after-request="if(event.detail.successful){ this.reset(); document.getElementById('add-prompt-panel').classList.add('u-hidden'); }">
+          <div class="u-grid u-grid-2 u-gap-3 u-mb-3">
+            <div>
               <label class="form-label">Rule name</label>
-              <input type="text" class="form-control form-control-sm" name="name" placeholder="e.g. Urgent emails">
+              <input type="text" class="input input-sm" name="name" placeholder="e.g. Urgent emails">
             </div>
-            <div class="col-md-6">
+            <div>
               <label class="form-label">Gmail label to apply</label>
-              <input type="text" class="form-control form-control-sm" name="label_name" placeholder="e.g. AI/Urgent">
+              <input type="text" class="input input-sm" name="label_name" placeholder="e.g. AI/Urgent">
               <div class="form-text">Label will be created in Gmail if it doesn't exist.</div>
             </div>
           </div>
-          <div class="mb-3">
+          <div class="u-mb-3">
             <label class="form-label">Apply to account</label>
-            <select class="form-select form-select-sm" name="account_id" id="new-prompt-account"
+            <select class="select select-sm" name="account_id" id="new-prompt-account"
               hx-get="/fragments/account-options?type=new-prompt"
               hx-trigger="load"
               hx-swap="innerHTML">
             </select>
             <div class="form-text">Global rules run on every account. Account-specific rules only run for that account.</div>
           </div>
-          <div class="mb-3">
+          <div class="u-mb-3">
             <label class="form-label">Instructions for the AI</label>
-            <textarea class="form-control form-control-sm" name="instructions" id="new-prompt-instructions" rows="3" placeholder="Describe what kind of emails should get this label. Be specific."></textarea>
+            <textarea class="textarea textarea-sm" name="instructions" id="new-prompt-instructions" rows="3" placeholder="Describe what kind of emails should get this label. Be specific."></textarea>
           </div>
-          <div class="mb-3">
+          <div class="u-mb-3">
             <label class="form-label">Actions when matched</label>
-            <div class="d-flex flex-wrap gap-2 mt-1">
-              <div class="d-flex align-items-center gap-2 bg-body-tertiary border border-secondary-subtle rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input" name="action_archive" value="1" id="new-action-archive"><label class="mb-0" for="new-action-archive">Archive</label></div>
-              <div class="d-flex align-items-center gap-2 bg-body-tertiary border border-secondary-subtle rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input" name="action_spam" value="1" id="new-action-spam"><label class="mb-0" for="new-action-spam">Send to Spam</label></div>
-              <div class="d-flex align-items-center gap-2 bg-body-tertiary border border-secondary-subtle rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input" name="action_trash" value="1" id="new-action-trash"><label class="mb-0" for="new-action-trash">Trash</label></div>
-              <div class="d-flex align-items-center gap-2 bg-body-tertiary border border-secondary-subtle rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input" name="action_mark_read" value="1" id="new-action-mark-read"><label class="mb-0" for="new-action-mark-read">Mark as Read</label></div>
+            <div class="u-flex u-flex-wrap u-gap-2 u-mt-1">
+              <div class="u-flex u-items-center u-gap-2 bg-base-300 border u-border-subtle rounded-lg u-px-3 u-py-2"><input type="checkbox" class="checkbox" name="action_archive" value="1" id="new-action-archive"><label class="u-mb-0" for="new-action-archive">Archive</label></div>
+              <div class="u-flex u-items-center u-gap-2 bg-base-300 border u-border-subtle rounded-lg u-px-3 u-py-2"><input type="checkbox" class="checkbox" name="action_spam" value="1" id="new-action-spam"><label class="u-mb-0" for="new-action-spam">Send to Spam</label></div>
+              <div class="u-flex u-items-center u-gap-2 bg-base-300 border u-border-subtle rounded-lg u-px-3 u-py-2"><input type="checkbox" class="checkbox" name="action_trash" value="1" id="new-action-trash"><label class="u-mb-0" for="new-action-trash">Trash</label></div>
+              <div class="u-flex u-items-center u-gap-2 bg-base-300 border u-border-subtle rounded-lg u-px-3 u-py-2"><input type="checkbox" class="checkbox" name="action_mark_read" value="1" id="new-action-mark-read"><label class="u-mb-0" for="new-action-mark-read">Mark as Read</label></div>
             </div>
           </div>
-          <div class="d-flex align-items-center gap-2 border-top pt-3 mb-3">
-            <input type="checkbox" name="stop_processing" value="1" id="new-stop-processing">
-            <label class="mb-0" for="new-stop-processing">Stop processing further rules if this one matches</label>
+          <div class="u-flex u-items-center u-gap-2 border-t u-pt-3 u-mb-3">
+            <input type="checkbox" class="checkbox" name="stop_processing" value="1" id="new-stop-processing">
+            <label class="u-mb-0" for="new-stop-processing">Stop processing further rules if this one matches</label>
           </div>
-          <div class="d-flex gap-2">
+          <div class="u-flex u-gap-2">
             <button type="submit" class="btn btn-primary btn-sm">Save Rule</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('add-prompt-panel').classList.toggle('d-none')">Cancel</button>
+            <button type="button" class="btn btn-outline btn-secondary btn-sm" onclick="document.getElementById('add-prompt-panel').classList.toggle('u-hidden')">Cancel</button>
           </div>
         </form>
       </div>
@@ -270,79 +184,79 @@
         hx-trigger="load, change from:#prompt-filter-account"
         hx-include="#prompt-filter-account"
         hx-swap="innerHTML">
-        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
+        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
       </div>
     </div>
 
     <!-- Builder -->
     <div class="page" id="page-builder">
-      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
-        <div><h2 class="h5 fw-bold mb-1">Prompt Builder</h2><div class="small text-body-secondary">Describe what to filter — AI drafts the rule instruction</div></div>
+      <div class="u-flex u-items-center u-justify-between u-mb-4 u-pb-3 border-b u-border-subtle">
+        <div><h2 class="font-bold u-mb-1">Prompt Builder</h2><div class="text-sm u-text-muted">Describe what to filter — AI drafts the rule instruction</div></div>
       </div>
       <div style="max-width:600px;">
-        <div class="mb-3">
+        <div class="u-mb-3">
           <label class="form-label">Describe the emails you want to label</label>
-          <textarea class="form-control" id="builder-description" rows="4" placeholder="e.g. Promotional emails and newsletters from online stores that I didn't explicitly sign up for..."></textarea>
+          <textarea class="textarea" id="builder-description" rows="4" placeholder="e.g. Promotional emails and newsletters from online stores that I didn't explicitly sign up for..."></textarea>
         </div>
         <button class="btn btn-primary btn-sm" id="btn-generate" onclick="generatePrompt()">&#9670; Generate Instruction</button>
 
         <div id="builder-result" style="display:none;margin-top:28px;">
           <hr>
           <div id="builder-sse-container" hx-ext="sse" sse-close="done">
-            <div id="builder-thinking-wrap" class="mb-4">
-              <div class="font-monospace small text-body-secondary mb-2" style="font-size:11px;letter-spacing:0.05em;">&#9670; THINKING</div>
+            <div id="builder-thinking-wrap" class="u-mb-4">
+              <div class="font-mono text-sm u-text-muted u-mb-2" style="font-size:11px;letter-spacing:0.05em;">&#9670; THINKING</div>
               <div id="builder-thinking" sse-swap="think" hx-swap="beforeend"
-                class="bg-body-tertiary border rounded p-3 font-monospace text-body-secondary"
+                class="bg-base-300 border rounded u-p-3 font-mono u-text-muted"
                 style="font-size:12px;white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6;"></div>
             </div>
-            <h6 class="text-uppercase text-body-secondary small fw-semibold border-bottom pb-2 mb-3">Generated instruction</h6>
-            <div class="mb-3">
-              <textarea class="form-control" id="builder-instruction" rows="5" sse-swap="content" hx-swap="beforeend"></textarea>
+            <h6 class="uppercase u-text-muted text-sm font-semibold border-b u-pb-2 u-mb-3">Generated instruction</h6>
+            <div class="u-mb-3">
+              <textarea class="textarea" id="builder-instruction" rows="5" sse-swap="content" hx-swap="beforeend"></textarea>
               <div class="form-text">Edit if needed, then send it to the Prompts page.</div>
             </div>
           </div>
-          <button class="btn btn-outline-secondary btn-sm" id="btn-use-prompt" disabled onclick="useBuilderInstruction()">&#8599; Use this prompt</button>
+          <button class="btn btn-outline btn-secondary btn-sm" id="btn-use-prompt" disabled onclick="useBuilderInstruction()">&#8599; Use this prompt</button>
         </div>
       </div>
     </div>
 
     <!-- Settings -->
     <div class="page" id="page-settings">
-      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
-        <div><h2 class="h5 fw-bold mb-1">Settings</h2><div class="small text-body-secondary">Configure scanning behavior</div></div>
+      <div class="u-flex u-items-center u-justify-between u-mb-4 u-pb-3 border-b u-border-subtle">
+        <div><h2 class="font-bold u-mb-1">Settings</h2><div class="text-sm u-text-muted">Configure scanning behavior</div></div>
       </div>
       <div style="max-width:520px;">
         <div id="settings-container"
           hx-get="/fragments/settings"
           hx-trigger="load"
           hx-swap="innerHTML">
-          <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
+          <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
         </div>
       </div>
     </div>
 
     <!-- Logs -->
     <div class="page" id="page-logs">
-      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
-        <div><h2 class="h5 fw-bold mb-1">Logs</h2><div class="small text-body-secondary">Last 100 events</div></div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-secondary btn-sm" onclick="(function(p){p.classList.toggle('d-none');if(!p.classList.contains('d-none')){const now=new Date(),y=new Date(now-86400000),f=d=>new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);document.getElementById('log-dl-end').value=f(now);document.getElementById('log-dl-start').value=f(y);}})(document.getElementById('log-download-panel'))">&#8659; Download</button>
-          <button class="btn btn-outline-secondary btn-sm"
+      <div class="u-flex u-items-center u-justify-between u-mb-4 u-pb-3 border-b u-border-subtle">
+        <div><h2 class="font-bold u-mb-1">Logs</h2><div class="text-sm u-text-muted">Last 100 events</div></div>
+        <div class="u-flex u-gap-2">
+          <button class="btn btn-outline btn-secondary btn-sm" onclick="(function(p){p.classList.toggle('u-hidden');if(!p.classList.contains('u-hidden')){const now=new Date(),y=new Date(now-86400000),f=d=>new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);document.getElementById('log-dl-end').value=f(now);document.getElementById('log-dl-start').value=f(y);}})(document.getElementById('log-download-panel'))">&#8659; Download</button>
+          <button class="btn btn-outline btn-secondary btn-sm"
             hx-get="/fragments/logs"
             hx-target="#logs-content"
             hx-swap="innerHTML">&#8635; Refresh</button>
         </div>
       </div>
-      <div class="card p-4 mb-4 d-none" id="log-download-panel">
-        <h6 class="text-primary mb-3">Download Logs</h6>
-        <div class="row g-3 mb-3" style="max-width:560px;">
-          <div class="col-md-6">
+      <div class="card u-p-4 u-mb-4 u-hidden" id="log-download-panel">
+        <h6 class="text-primary u-mb-3">Download Logs</h6>
+        <div class="u-grid u-grid-2 u-gap-3 u-mb-3" style="max-width:560px;">
+          <div>
             <label class="form-label" for="log-dl-start">From</label>
-            <input type="datetime-local" class="form-control form-control-sm" id="log-dl-start">
+            <input type="datetime-local" class="input input-sm" id="log-dl-start">
           </div>
-          <div class="col-md-6">
+          <div>
             <label class="form-label" for="log-dl-end">To</label>
-            <input type="datetime-local" class="form-control form-control-sm" id="log-dl-end">
+            <input type="datetime-local" class="input input-sm" id="log-dl-end">
           </div>
         </div>
         <button class="btn btn-primary btn-sm" onclick="downloadLogs()">Download CSV</button>
@@ -351,23 +265,23 @@
         hx-get="/fragments/logs"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
+        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
       </div>
     </div>
 
     <!-- Categorization History -->
     <div class="page" id="page-history">
-      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
-        <div><h2 class="h5 fw-bold mb-1">Categorization History</h2><div class="small text-body-secondary">Emails recently labeled by your rules</div></div>
+      <div class="u-flex u-items-center u-justify-between u-mb-4 u-pb-3 border-b u-border-subtle">
+        <div><h2 class="font-bold u-mb-1">Categorization History</h2><div class="text-sm u-text-muted">Emails recently labeled by your rules</div></div>
       </div>
-      <form id="hist-filter-form" class="d-flex flex-wrap gap-3 mb-4 align-items-end"
+      <form id="hist-filter-form" class="u-flex u-flex-wrap u-gap-3 u-mb-4 u-items-end"
         hx-get="/fragments/history/filters"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2">&#9670;</div>Loading…</div>
+        <div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2">&#9670;</div>Loading…</div>
       </form>
-      <div class="table-responsive">
-        <table class="table table-hover table-sm align-middle">
+      <div class="u-overflow-x-auto">
+        <table class="table table-hover table-sm u-align-middle">
           <thead>
             <tr>
               <th class="col-time">Time</th>
@@ -383,7 +297,7 @@
             hx-get="/fragments/history"
             hx-trigger="load"
             hx-swap="innerHTML">
-            <tr><td colspan="7"><div class="text-center text-body-secondary py-5"><div class="fs-3 opacity-25 mb-2"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 10v6l4 3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>No history yet. Labels will appear here after emails are scanned.</div></td></tr>
+            <tr><td colspan="7"><div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 10v6l4 3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>No history yet. Labels will appear here after emails are scanned.</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -391,12 +305,12 @@
 
     <!-- Retention -->
     <div class="page" id="page-retention">
-      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary-subtle">
-        <div><h2 class="h5 fw-bold mb-1">Retention</h2><div class="small text-body-secondary">Automatically move old emails to Trash</div></div>
+      <div class="u-flex u-items-center u-justify-between u-mb-4 u-pb-3 border-b u-border-subtle">
+        <div><h2 class="font-bold u-mb-1">Retention</h2><div class="text-sm u-text-muted">Automatically move old emails to Trash</div></div>
       </div>
-      <div class="d-flex align-items-center gap-3 mb-4">
-        <label class="form-label mb-0">Account</label>
-        <select class="form-select form-select-sm w-auto" id="retention-account-select" name="account_id"
+      <div class="u-flex u-items-center u-gap-3 u-mb-4">
+        <label class="form-label u-mb-0">Account</label>
+        <select class="select select-sm u-w-auto" id="retention-account-select" name="account_id"
           hx-get="/fragments/account-options?type=retention"
           hx-trigger="load"
           hx-swap="innerHTML">
@@ -535,7 +449,7 @@
     const list = document.getElementById('prompts-list');
     const doPopulate = () => {
       const panel = document.getElementById('add-prompt-panel');
-      if (panel.classList.contains('d-none')) panel.classList.remove('d-none');
+      if (panel.classList.contains('u-hidden')) panel.classList.remove('u-hidden');
       const ta = document.getElementById('new-prompt-instructions');
       if (ta) { ta.value = instruction; ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     };
@@ -576,10 +490,10 @@
   });
 
   document.body.addEventListener('closeOAuthPanel', function() {
-    document.getElementById('add-account-panel').classList.add('d-none');
+    document.getElementById('add-account-panel').classList.add('u-hidden');
     // Reset step 2 back to placeholder
     document.getElementById('oauth-step-2-body').innerHTML =
-      '<div class="flex-grow-1"><div class="fw-medium mb-2">Open the link and approve access</div><div class="small text-body-secondary mb-2 lh-lg">Click "Generate Link" first.</div></div>';
+      '<div class="u-flex-grow"><div class="font-medium u-mb-2">Open the link and approve access</div><div class="text-sm u-text-muted u-mb-2 u-leading-relaxed">Click "Generate Link" first.</div></div>';
     document.getElementById('oauth-step-1').classList.remove('done');
   });
 
