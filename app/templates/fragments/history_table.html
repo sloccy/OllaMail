@@ -16,7 +16,7 @@
         {% endif %}
       {% endfor %}
       {% if extra_actions %}
-        {% for a in extra_actions %}<span class="badge badge-secondary u-mr-1">{{ a|e }}</span>{% endfor %}
+        {% for a in extra_actions %}<span class="badge badge-secondary">{{ a|e }}</span>{% endfor %}
       {% else %}
         <span class="u-text-muted">—</span>
       {% endif %}
