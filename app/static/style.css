@@ -171,15 +171,18 @@ html, body { height: 100%; font-size: 14px; }
 .setting-row { transition: background 0.15s ease; }
 .setting-row:hover { background: var(--hover-subtle-bg); }
 
+/* History table */
+.history-table { table-layout: fixed; width: 100%; }
+
 /* History columns */
-.col-time { width: 130px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; white-space: nowrap; }
-.col-account { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
-.col-subject { min-width: 160px; word-break: break-word; }
-.col-sender { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.col-rule { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.col-label { width: 120px; }
+.col-time { width: 12%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; white-space: nowrap; }
+.col-account { width: 13%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.col-subject { word-break: break-word; }
+.col-sender { width: 14%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.col-rule { width: 11%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-label { width: 10%; }
 .col-label .badge { white-space: normal; height: auto; line-height: 1.3; }
-.col-actions { width: 110px; display: flex; flex-wrap: wrap; gap: 4px; }
+.col-actions { width: 10%; display: flex; flex-wrap: wrap; gap: 4px; }
 .col-actions .badge { white-space: nowrap; height: auto; }
 
 /* History table header */
