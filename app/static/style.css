@@ -141,8 +141,8 @@ html, body { height: 100%; font-size: 14px; }
 }
 .sidebar .menu a {
   border-left: 2px solid transparent;
-  border-radius: 0 6px 6px 0;
-  margin-right: 8px;
+  border-radius: 0;
+  margin-right: 0;
   font-size: 13px;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
