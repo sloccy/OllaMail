@@ -127,6 +127,146 @@ def api_export_prompts():
     )
 
 
+@app.route("/api/config/export", methods=["GET"])
+def api_export_config():
+    from datetime import datetime, timezone
+    accounts_raw = db.list_accounts()
+    account_map = {a["id"]: a["email"] for a in accounts_raw}
+
+    accounts_export = [{"email": a["email"], "active": a["active"]} for a in accounts_raw]
+
+    prompts_raw = db.list_prompts()
+    prompts_export = []
+    for p in prompts_raw:
+        aid = p.get("account_id")
+        prompts_export.append({
+            "name": p["name"],
+            "instructions": p["instructions"],
+            "label_name": p["label_name"],
+            "active": p["active"],
+            "action_archive": p.get("action_archive", 0),
+            "action_spam": p.get("action_spam", 0),
+            "action_trash": p.get("action_trash", 0),
+            "action_mark_read": p.get("action_mark_read", 0),
+            "stop_processing": p.get("stop_processing", 0),
+            "account": account_map.get(aid, "all accounts") if aid else "all accounts",
+            "sort_order": p.get("sort_order", 0),
+        })
+
+    with db.get_db() as conn:
+        settings_rows = conn.execute("SELECT key, value FROM settings").fetchall()
+    settings_export = {r["key"]: r["value"] for r in settings_rows
+                       if r["key"] != "flask_secret_key"}
+
+    retention_export = []
+    for a in accounts_raw:
+        ret = db.get_retention(a["id"])
+        retention_export.append({
+            "account": a["email"],
+            "global_days": ret["global_days"],
+            "label_rules": [{"label_name": lr["label_name"], "days": lr["days"]}
+                            for lr in ret["labels"]],
+            "exemptions": [{"label_name": ex["label_name"]} for ex in ret["exemptions"]],
+        })
+
+    payload = {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "accounts": accounts_export,
+        "prompts": prompts_export,
+        "settings": settings_export,
+        "retention": retention_export,
+    }
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    return Response(
+        json.dumps(payload, indent=2),
+        mimetype="application/json",
+        headers={"Content-Disposition": f"attachment; filename=config-backup-{date_str}.json"},
+    )
+
+
+@app.route("/api/config/import", methods=["POST"])
+def api_import_config():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded."}), 400
+    f = request.files["file"]
+    try:
+        data = json.loads(f.read())
+    except Exception:
+        return jsonify({"error": "Invalid JSON file."}), 400
+    if "version" not in data:
+        return jsonify({"error": "Missing version key — not a valid config backup."}), 400
+
+    summary = {"accounts": {"added": 0, "skipped": 0},
+               "prompts": {"added": 0, "skipped": 0},
+               "settings": {"added": 0, "skipped": 0},
+               "retention": {"added": 0, "skipped": 0}}
+
+    # Accounts — build email→id mapping
+    email_to_id = {a["email"]: a["id"] for a in db.list_accounts()}
+    for acct in data.get("accounts", []):
+        email = acct.get("email", "").strip()
+        if not email:
+            continue
+        if email in email_to_id:
+            summary["accounts"]["skipped"] += 1
+        else:
+            new_id = db.create_account_placeholder(email)
+            email_to_id[email] = new_id
+            summary["accounts"]["added"] += 1
+
+    # Prompts
+    for p in data.get("prompts", []):
+        acct_str = p.get("account", "all accounts")
+        account_id = email_to_id.get(acct_str) if acct_str != "all accounts" else None
+        if db.prompt_exists(p["name"], account_id):
+            summary["prompts"]["skipped"] += 1
+        else:
+            db.create_prompt(
+                p["name"], p["instructions"], p["label_name"],
+                action_archive=p.get("action_archive", 0),
+                action_spam=p.get("action_spam", 0),
+                action_trash=p.get("action_trash", 0),
+                action_mark_read=p.get("action_mark_read", 0),
+                stop_processing=p.get("stop_processing", 0),
+                account_id=account_id,
+            )
+            summary["prompts"]["added"] += 1
+
+    # Settings
+    for key, value in data.get("settings", {}).items():
+        if key == "flask_secret_key":
+            continue
+        if db.get_setting(key) is None:
+            db.set_setting(key, value)
+            summary["settings"]["added"] += 1
+        else:
+            summary["settings"]["skipped"] += 1
+
+    # Retention
+    for ret in data.get("retention", []):
+        email = ret.get("account", "")
+        account_id = email_to_id.get(email)
+        if not account_id:
+            continue
+        if ret.get("global_days") is not None and not db.has_global_retention(account_id):
+            db.set_global_retention(account_id, ret["global_days"])
+            summary["retention"]["added"] += 1
+        elif ret.get("global_days") is not None:
+            summary["retention"]["skipped"] += 1
+        for lr in ret.get("label_rules", []):
+            if not db.label_retention_exists(account_id, lr["label_name"]):
+                db.add_label_retention(account_id, lr["label_name"], lr["days"])
+                summary["retention"]["added"] += 1
+            else:
+                summary["retention"]["skipped"] += 1
+        for ex in ret.get("exemptions", []):
+            db.add_label_exemption(account_id, ex["label_name"])
+
+    db.add_log("INFO", f"Config imported: {summary}")
+    return jsonify({"ok": True, "summary": summary})
+
+
 @app.route("/api/logs/download", methods=["GET"])
 def api_download_logs():
     import csv, io

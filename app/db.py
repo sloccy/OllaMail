@@ -412,6 +412,46 @@ def delete_label_exemption(exemption_id):
         conn.execute("DELETE FROM label_exemptions WHERE id = ?", (exemption_id,))
 
 
+def create_account_placeholder(email):
+    """Insert account with email only (no credentials). Returns account id."""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO accounts (email, credentials_json, active) VALUES (?, '', 1)",
+            (email,),
+        )
+        row = conn.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone()
+    return row["id"] if row else None
+
+
+def prompt_exists(name, account_id):
+    """Check if a prompt with the given name and account_id combo exists."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM prompts WHERE name = ? AND account_id IS ?",
+            (name, account_id),
+        ).fetchone()
+    return row is not None
+
+
+def label_retention_exists(account_id, label_name):
+    """Check if a label retention rule exists for this account+label combo."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM label_retention WHERE account_id = ? AND label_name = ?",
+            (account_id, label_name),
+        ).fetchone()
+    return row is not None
+
+
+def has_global_retention(account_id):
+    """Check if global retention is set for this account."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM account_retention WHERE account_id = ?", (account_id,)
+        ).fetchone()
+    return row is not None
+
+
 def get_categorization_history(account_id=None, prompt_id=None,
                                 subject=None, sender=None, limit=200):
     wheres = []
