@@ -6,38 +6,38 @@ from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS
 
 def process_account(account: dict, prompts: list, provider: LLMProvider):
     """Fetch new emails for an account, classify them, and apply labels/actions.
-    Always returns the Gmail service object so the caller can run retention cleanup."""
+    Always returns credentials so the caller can run retention cleanup."""
     account_id = account["id"]
     email_addr = account["email"]
 
-    service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+    creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
     if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
         db.update_account_credentials(account_id, refreshed_creds)
 
     emails = gmail_client.fetch_recent_emails(
-        service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
+        creds, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
     )
     new_emails = [e for e in emails if not db.is_processed(account_id, e["id"])]
 
     if not new_emails:
         db.add_log("INFO", f"[{email_addr}] No new emails to process.")
         db.update_last_scan(account_id)
-        return service
+        return creds
 
     db.add_log("INFO", f"[{email_addr}] Processing {len(new_emails)} new email(s) against {len(prompts)} rule(s).")
 
     unique_labels = list({p["label_name"] for p in prompts})
-    label_cache = gmail_client.build_label_cache(service, unique_labels)
+    label_cache = gmail_client.build_label_cache(creds, unique_labels)
 
     for email in new_emails:
-        _process_email(email, account_id, email_addr, prompts, label_cache, service, provider)
+        _process_email(email, account_id, email_addr, prompts, label_cache, creds, provider)
 
     db.update_last_scan(account_id)
-    return service
+    return creds
 
 
 def _process_email(email: dict, account_id: int, email_addr: str,
-                   prompts: list, label_cache: dict, service, provider: LLMProvider) -> None:
+                   prompts: list, label_cache: dict, creds, provider: LLMProvider) -> None:
     try:
         email_results = provider.classify_email_batch(email, prompts)
         stop = False
@@ -48,21 +48,21 @@ def _process_email(email: dict, account_id: int, email_addr: str,
             should_label = email_results.get(prompt["id"], False)
 
             if should_label:
-                gmail_client.apply_label(service, email["id"], label_cache[prompt["label_name"]])
+                gmail_client.apply_label(creds, email["id"], label_cache[prompt["label_name"]])
                 actions_taken = [f"labeled → {prompt['label_name']}"]
 
                 if prompt.get("action_spam"):
-                    gmail_client.spam_email(service, email["id"])
+                    gmail_client.spam_email(creds, email["id"])
                     actions_taken.append("sent to spam")
                 elif prompt.get("action_trash"):
-                    gmail_client.trash_email(service, email["id"])
+                    gmail_client.trash_email(creds, email["id"])
                     actions_taken.append("trashed")
                 elif prompt.get("action_archive"):
-                    gmail_client.archive_email(service, email["id"])
+                    gmail_client.archive_email(creds, email["id"])
                     actions_taken.append("archived")
 
                 if prompt.get("action_mark_read"):
-                    gmail_client.mark_email_read(service, email["id"])
+                    gmail_client.mark_email_read(creds, email["id"])
                     actions_taken.append("marked as read")
 
                 if prompt.get("stop_processing"):

@@ -77,10 +77,10 @@ def _ensure_label_for_accounts(account_id, label_name):
         if not account:
             continue
         try:
-            service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+            creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
             if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
                 db.update_account_credentials(account["id"], refreshed_creds)
-            gmail_client.build_label_cache(service, [label_name])
+            gmail_client.build_label_cache(creds, [label_name])
         except Exception as e:
             db.add_log("WARNING", f"Could not pre-create label '{label_name}' for account {account.get('id')}: {e}")
 
@@ -522,10 +522,10 @@ def frag_retention(account_id):
     retention = db.get_retention(account_id)
     account = db.get_account(account_id)
     try:
-        service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+        creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
         if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
             db.update_account_credentials(account_id, refreshed_creds)
-        gmail_labels = gmail_client.list_labels(service)
+        gmail_labels = gmail_client.list_labels(creds)
     except Exception:
         gmail_labels = []
     return fragment_response("fragments/retention_panel.html",
@@ -554,8 +554,8 @@ def frag_set_retention(account_id):
     retention = db.get_retention(account_id)
     account = db.get_account(account_id)
     try:
-        service, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(service)
+        creds, _ = gmail_client.get_service(account["credentials_json"])
+        gmail_labels = gmail_client.list_labels(creds)
     except Exception:
         gmail_labels = []
     msg = "Global retention saved." if enabled else "Global retention disabled."
@@ -584,8 +584,8 @@ def frag_add_label_retention(account_id):
     retention = db.get_retention(account_id)
     account = db.get_account(account_id)
     try:
-        service, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(service)
+        creds, _ = gmail_client.get_service(account["credentials_json"])
+        gmail_labels = gmail_client.list_labels(creds)
     except Exception:
         gmail_labels = []
     return fragment_response("fragments/retention_panel.html",
@@ -600,8 +600,8 @@ def frag_delete_label_retention(account_id, rule_id):
     retention = db.get_retention(account_id)
     account = db.get_account(account_id)
     try:
-        service, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(service)
+        creds, _ = gmail_client.get_service(account["credentials_json"])
+        gmail_labels = gmail_client.list_labels(creds)
     except Exception:
         gmail_labels = []
     return fragment_response("fragments/retention_panel.html",
@@ -620,8 +620,8 @@ def frag_add_exemption(account_id):
     retention = db.get_retention(account_id)
     account = db.get_account(account_id)
     try:
-        service, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(service)
+        creds, _ = gmail_client.get_service(account["credentials_json"])
+        gmail_labels = gmail_client.list_labels(creds)
     except Exception:
         gmail_labels = []
     return fragment_response("fragments/retention_panel.html",
@@ -636,8 +636,8 @@ def frag_delete_exemption(account_id, exemption_id):
     retention = db.get_retention(account_id)
     account = db.get_account(account_id)
     try:
-        service, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(service)
+        creds, _ = gmail_client.get_service(account["credentials_json"])
+        gmail_labels = gmail_client.list_labels(creds)
     except Exception:
         gmail_labels = []
     return fragment_response("fragments/retention_panel.html",
@@ -750,10 +750,10 @@ def frag_retention_query():
         return Response("", content_type="text/html")
     retention = db.get_retention(account_id)
     try:
-        service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+        creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
         if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
             db.update_account_credentials(account_id, refreshed_creds)
-        gmail_labels = gmail_client.list_labels(service)
+        gmail_labels = gmail_client.list_labels(creds)
     except Exception:
         gmail_labels = []
     return fragment_response("fragments/retention_panel.html",
