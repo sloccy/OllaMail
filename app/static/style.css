@@ -12,6 +12,15 @@
  *   - No state variants (hover:, focus:, dark:) — write explicit CSS selectors
  *   - No arbitrary values (w-[300px]) — use inline styles or add a class here
  *   - No automatic utility generation — every class must be declared manually
+ *
+ * What works from DaisyUI without Tailwind:
+ *   WORKS:  Component classes — .btn, .card, .table, .badge, .menu, .input,
+ *           .select, .textarea, .checkbox, .toggle, .alert, .toast, .stats,
+ *           .skeleton, .timeline, .divider, .tooltip (defined in daisyui.css)
+ *   BROKEN: Color/theme utilities — .text-primary, .bg-base-200, .text-error,
+ *           etc. These are Tailwind utilities referencing DaisyUI CSS variables.
+ *           They must be defined manually in section D below.
+ *
  * When adding utilities, follow the u-* naming convention for layout/spacing.
  * Standard typography names (font-bold, text-sm) are fine — they're self-documenting.
  */
