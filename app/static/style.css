@@ -187,20 +187,35 @@
   --bulma-text-strong-l: 92%;
 }
 
-/* All colored tags: force white text in dark mode */
-[data-theme="dark"] .tag:not(.is-light):not(.is-outlined) {
+/* Dark-mode tag overrides — ensure legible text on all tag variants */
+[data-theme="dark"] .tag.is-primary,
+[data-theme="dark"] .tag.is-link,
+[data-theme="dark"] .tag.is-info,
+[data-theme="dark"] .tag.is-success,
+[data-theme="dark"] .tag.is-danger,
+[data-theme="dark"] .tag.is-warning {
   color: #fff;
 }
 
-/* is-light tags: Bulma defaults to near-white bg which is invisible in dark mode */
+/* Outlined colored tags: colored text + border, transparent bg */
+[data-theme="dark"] .tag.is-primary.is-outlined,
+[data-theme="dark"] .tag.is-link.is-outlined,
+[data-theme="dark"] .tag.is-info.is-outlined,
+[data-theme="dark"] .tag.is-success.is-outlined,
+[data-theme="dark"] .tag.is-danger.is-outlined,
+[data-theme="dark"] .tag.is-warning.is-outlined {
+  color: inherit;  /* let Bulma set the colored text */
+}
+
+/* is-light tags: Bulma's near-white bg is invisible in dark mode */
 [data-theme="dark"] .tag.is-light {
   background-color: rgba(255, 255, 255, 0.12);
   color: var(--om-text);
 }
 [data-theme="dark"] .tag.is-light.is-outlined {
   background-color: transparent;
-  border-color: var(--om-text-30);
-  color: var(--om-text-60);
+  border-color: var(--om-text-40);
+  color: var(--om-text-80);
 }
 
 body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; letter-spacing: -0.01em; }
