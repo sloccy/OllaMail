@@ -18,6 +18,8 @@ CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "/credentials/credentials.json"
 REDIRECT_URI = "http://localhost"
 GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 
+_session = requests.Session()
+
 
 def get_auth_url(state: str) -> str:
     flow = Flow.from_client_secrets_file(CREDENTIALS_FILE, scopes=SCOPES, state=state)
@@ -40,7 +42,7 @@ def exchange_code(state: str, code: str) -> tuple[str, str]:
 
 
 def _get_email(creds: Credentials) -> str:
-    resp = requests.get(
+    resp = _session.get(
         "https://www.googleapis.com/oauth2/v2/userinfo",
         headers={"Authorization": f"Bearer {creds.token}"},
     )
@@ -59,7 +61,7 @@ def get_service(credentials_json: str):
 def _gmail_request(method, path, creds, **kwargs):
     """Make an authenticated Gmail API request."""
     headers = {"Authorization": f"Bearer {creds.token}"}
-    resp = requests.request(method, f"{GMAIL_API}/{path}", headers=headers, **kwargs)
+    resp = _session.request(method, f"{GMAIL_API}/{path}", headers=headers, **kwargs)
     resp.raise_for_status()
     return resp.json() if resp.content else None
 

@@ -1,6 +1,8 @@
 import json
 import requests
 from app import db
+
+_session = requests.Session()
 from app.llm.base import LLMProvider
 from app.config import (OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_TIMEOUT,
                         OLLAMA_NUM_CTX, OLLAMA_NUM_PREDICT, OLLAMA_GENERATE_NUM_PREDICT)
@@ -9,13 +11,13 @@ from app.config import (OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_TIMEOUT,
 class OllamaProvider(LLMProvider):
     def ensure_model_pulled(self) -> None:
         try:
-            resp = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
+            resp = _session.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
             models = [m["name"] for m in resp.json().get("models", [])]
             model_base = OLLAMA_MODEL.split(":")[0]
             already_present = any(m.startswith(model_base) for m in models)
             if not already_present:
                 print(f"Pulling model {OLLAMA_MODEL} from Ollama... (this may take a while)")
-                requests.post(
+                _session.post(
                     f"{OLLAMA_HOST}/api/pull",
                     json={"name": OLLAMA_MODEL, "stream": False},
                     timeout=OLLAMA_TIMEOUT,
@@ -50,7 +52,7 @@ Example: {{{example}}}
 No explanation, no markdown, just the JSON object."""
 
         try:
-            response = requests.post(
+            response = _session.post(
                 f"{OLLAMA_HOST}/api/chat",
                 json={
                     "model": OLLAMA_MODEL,
@@ -163,7 +165,7 @@ No explanation, no markdown, just the JSON object."""
         """Generator that yields {"type": "think"|"content", "text": str} dicts."""
         payload = self._build_generate_request(description)
         payload["stream"] = True
-        response = requests.post(
+        response = _session.post(
             f"{OLLAMA_HOST}/api/chat",
             json=payload,
             stream=True,
@@ -193,7 +195,7 @@ No explanation, no markdown, just the JSON object."""
     def generate_prompt_instruction(self, description: str) -> str:
         payload = self._build_generate_request(description)
         payload["stream"] = False
-        response = requests.post(
+        response = _session.post(
             f"{OLLAMA_HOST}/api/chat",
             json=payload,
             timeout=OLLAMA_TIMEOUT,
