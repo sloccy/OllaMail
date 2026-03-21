@@ -3,7 +3,7 @@
   {% for l in logs %}
   <li>
     <div class="timeline-middle">
-      <span class="badge badge-xs {% if l.level == 'ERROR' %}badge-error{% elif l.level == 'INFO' %}badge-primary{% else %}badge-ghost{% endif %}"></span>
+      <span class="tag tag-dot {% if l.level == 'ERROR' %}is-danger{% elif l.level == 'INFO' %}is-primary{% else %}is-light{% endif %}"></span>
     </div>
     <div class="timeline-end font-mono text-xs py-1">
       <span class="opacity-50 mr-2">{{ l.timestamp|fmtdate }}</span>

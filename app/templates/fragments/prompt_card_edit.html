@@ -4,7 +4,7 @@
      ondragover="onDragOver(event)"
      ondragleave="onDragLeave(event)"
      ondrop="onDrop(event)">
-  <div class="card-body">
+  <div class="card-content">
     <div class="u-flex u-items-start u-gap-3">
       <div class="drag-handle u-text-muted">&#9776;</div>
       <div class="u-flex-grow">
@@ -15,25 +15,27 @@
           <div class="u-grid u-grid-2 u-gap-3 u-mb-3">
             <div>
               <label class="form-label">Rule name</label>
-              <input type="text" class="input input-sm" name="name" value="{{ p.name|e }}">
+              <input type="text" class="input is-small" name="name" value="{{ p.name|e }}">
             </div>
             <div>
               <label class="form-label">Gmail label</label>
-              <input type="text" class="input input-sm" name="label_name" value="{{ p.label_name|e }}">
+              <input type="text" class="input is-small" name="label_name" value="{{ p.label_name|e }}">
             </div>
           </div>
           <div class="u-mb-3">
             <label class="form-label">Apply to account</label>
-            <select class="select select-sm" name="account_id">
+            <div class="select is-small">
+            <select name="account_id">
               <option value="">All accounts (global)</option>
               {% for a in accounts %}
               <option value="{{ a.id }}" {% if p.account_id == a.id %}selected{% endif %}>{{ a.email|e }}</option>
               {% endfor %}
             </select>
+            </div>
           </div>
           <div class="u-mb-3">
             <label class="form-label">Instructions</label>
-            <textarea class="textarea textarea-sm" name="instructions">{{ p.instructions|e }}</textarea>
+            <textarea class="textarea is-small" name="instructions">{{ p.instructions|e }}</textarea>
           </div>
           <div class="u-mb-3">
             <label class="form-label">Actions when matched</label>
@@ -49,8 +51,8 @@
             <label class="u-mb-0" for="ea-stop-{{ p.id }}">Stop processing further rules if this one matches</label>
           </div>
           <div class="u-flex u-gap-2">
-            <button type="submit" class="btn btn-primary btn-sm">Save</button>
-            <button type="button" class="btn btn-outline btn-secondary btn-sm"
+            <button type="submit" class="button is-primary is-small">Save</button>
+            <button type="button" class="button is-outlined is-info is-small"
               hx-get="/fragments/prompts/{{ p.id }}/view"
               hx-target="#prompt-card-{{ p.id }}"
               hx-swap="outerHTML">Cancel</button>
