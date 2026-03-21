@@ -78,7 +78,7 @@ def _ensure_label_for_accounts(account_id, label_name):
             continue
         try:
             creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-            if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
+            if refreshed_creds != account["credentials_json"]:
                 db.update_account_credentials(account["id"], refreshed_creds)
             gmail_client.build_label_cache(creds, [label_name])
         except Exception as e:
@@ -517,13 +517,13 @@ def frag_history_filters():
 
 @app.route("/fragments/retention/<int:account_id>")
 def frag_retention(account_id):
-    if not db.get_account(account_id):
+    account = db.get_account(account_id)
+    if not account:
         return "", 404
     retention = db.get_retention(account_id)
-    account = db.get_account(account_id)
     try:
         creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-        if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
+        if refreshed_creds != account["credentials_json"]:
             db.update_account_credentials(account_id, refreshed_creds)
         gmail_labels = gmail_client.list_labels(creds)
     except Exception:
@@ -535,7 +535,8 @@ def frag_retention(account_id):
 
 @app.route("/fragments/retention/<int:account_id>", methods=["POST"])
 def frag_set_retention(account_id):
-    if not db.get_account(account_id):
+    account = db.get_account(account_id)
+    if not account:
         return "", 404
     f = request.form
     enabled = bool(f.get("enabled"))
@@ -552,7 +553,6 @@ def frag_set_retention(account_id):
     else:
         db.clear_global_retention(account_id)
     retention = db.get_retention(account_id)
-    account = db.get_account(account_id)
     try:
         creds, _ = gmail_client.get_service(account["credentials_json"])
         gmail_labels = gmail_client.list_labels(creds)
@@ -567,7 +567,8 @@ def frag_set_retention(account_id):
 
 @app.route("/fragments/retention/<int:account_id>/labels", methods=["POST"])
 def frag_add_label_retention(account_id):
-    if not db.get_account(account_id):
+    account = db.get_account(account_id)
+    if not account:
         return "", 404
     f = request.form
     label_name = (f.get("label_name") or "").strip()
@@ -582,7 +583,6 @@ def frag_add_label_retention(account_id):
     if days >= 1:
         db.add_label_retention(account_id, label_name, days)
     retention = db.get_retention(account_id)
-    account = db.get_account(account_id)
     try:
         creds, _ = gmail_client.get_service(account["credentials_json"])
         gmail_labels = gmail_client.list_labels(creds)
@@ -612,13 +612,13 @@ def frag_delete_label_retention(account_id, rule_id):
 
 @app.route("/fragments/retention/<int:account_id>/exemptions", methods=["POST"])
 def frag_add_exemption(account_id):
-    if not db.get_account(account_id):
+    account = db.get_account(account_id)
+    if not account:
         return "", 404
     label_name = (request.form.get("label_name") or "").strip()
     if label_name:
         db.add_label_exemption(account_id, label_name)
     retention = db.get_retention(account_id)
-    account = db.get_account(account_id)
     try:
         creds, _ = gmail_client.get_service(account["credentials_json"])
         gmail_labels = gmail_client.list_labels(creds)
@@ -751,7 +751,7 @@ def frag_retention_query():
     retention = db.get_retention(account_id)
     try:
         creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-        if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
+        if refreshed_creds != account["credentials_json"]:
             db.update_account_credentials(account_id, refreshed_creds)
         gmail_labels = gmail_client.list_labels(creds)
     except Exception:

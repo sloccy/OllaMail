@@ -29,6 +29,11 @@ def get_db():
         raise
 
 
+@contextmanager
+def get_db_readonly():
+    yield _get_connection()
+
+
 def init_db():
     with get_db() as conn:
         conn.executescript("""
@@ -158,7 +163,7 @@ def _migrate():
 # ---- Settings ----
 
 def get_setting(key, default=None):
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else default
 
@@ -173,14 +178,14 @@ def set_setting(key, value):
 # ---- Accounts ----
 
 def list_accounts():
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         return [dict(r) for r in conn.execute(
             "SELECT * FROM accounts ORDER BY added_at DESC"
         ).fetchall()]
 
 
 def get_account(account_id):
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
     return dict(row) if row else None
 
@@ -233,7 +238,7 @@ def list_prompts(account_id=None):
     Return prompts. If account_id is given, return prompts that either belong
     to that account or are global (account_id IS NULL). Otherwise return all prompts.
     """
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         if account_id is not None:
             rows = conn.execute(
                 """SELECT * FROM prompts
@@ -280,8 +285,10 @@ def update_prompt(prompt_id, name, instructions, label_name, active,
 
 def reorder_prompts(ordered_ids: list):
     with get_db() as conn:
-        for i, pid in enumerate(ordered_ids):
-            conn.execute("UPDATE prompts SET sort_order=? WHERE id=?", (i + 1, pid))
+        conn.executemany(
+            "UPDATE prompts SET sort_order=? WHERE id=?",
+            [(i + 1, pid) for i, pid in enumerate(ordered_ids)],
+        )
 
 
 def delete_prompt(prompt_id):
@@ -292,12 +299,26 @@ def delete_prompt(prompt_id):
 # ---- Processed emails ----
 
 def is_processed(account_id, message_id):
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         row = conn.execute(
             "SELECT 1 FROM processed_emails WHERE account_id=? AND message_id=?",
             (account_id, message_id),
         ).fetchone()
     return row is not None
+
+
+def filter_unprocessed(account_id, message_ids: list) -> list:
+    """Return the subset of message_ids that have NOT been processed yet."""
+    if not message_ids:
+        return []
+    placeholders = ",".join("?" * len(message_ids))
+    with get_db_readonly() as conn:
+        rows = conn.execute(
+            f"SELECT message_id FROM processed_emails WHERE account_id=? AND message_id IN ({placeholders})",
+            [account_id] + list(message_ids),
+        ).fetchall()
+    already_processed = {r["message_id"] for r in rows}
+    return [mid for mid in message_ids if mid not in already_processed]
 
 
 def mark_processed(account_id, message_id):
@@ -329,14 +350,14 @@ def trim_logs():
 
 
 def get_logs(limit=100):
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         return [dict(r) for r in conn.execute(
             "SELECT * FROM logs ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()]
 
 
 def get_logs_range(start, end):
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         return [dict(r) for r in conn.execute(
             "SELECT * FROM logs WHERE timestamp >= ? AND timestamp <= ? ORDER BY id ASC",
             (start, end)
@@ -361,7 +382,7 @@ def add_categorization(account_id, account_email, message_id, subject, sender,
 # ---- Retention Rules ----
 
 def get_retention(account_id):
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         row = conn.execute(
             "SELECT global_days FROM account_retention WHERE account_id = ?", (account_id,)
         ).fetchone()
@@ -432,7 +453,7 @@ def create_account_placeholder(email):
 
 def prompt_exists(name, account_id):
     """Check if a prompt with the given name and account_id combo exists."""
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         row = conn.execute(
             "SELECT 1 FROM prompts WHERE name = ? AND account_id IS ?",
             (name, account_id),
@@ -442,7 +463,7 @@ def prompt_exists(name, account_id):
 
 def label_retention_exists(account_id, label_name):
     """Check if a label retention rule exists for this account+label combo."""
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         row = conn.execute(
             "SELECT 1 FROM label_retention WHERE account_id = ? AND label_name = ?",
             (account_id, label_name),
@@ -452,7 +473,7 @@ def label_retention_exists(account_id, label_name):
 
 def has_global_retention(account_id):
     """Check if global retention is set for this account."""
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         row = conn.execute(
             "SELECT 1 FROM account_retention WHERE account_id = ?", (account_id,)
         ).fetchone()
@@ -480,5 +501,5 @@ def get_categorization_history(account_id=None, prompt_id=None,
     if wheres:
         sql += " WHERE " + " AND ".join(wheres)
     sql += " ORDER BY id DESC LIMIT ?"
-    with get_db() as conn:
+    with get_db_readonly() as conn:
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
