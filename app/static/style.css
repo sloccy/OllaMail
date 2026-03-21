@@ -130,8 +130,10 @@
   --om-primary-06: hsla(225, 84%, 62%, 0.06);
   --om-primary-05: hsla(225, 84%, 62%, 0.05);
   --om-text: hsl(225, 12%, 82%);
+  --om-text-80: hsla(225, 12%, 82%, 0.8);
   --om-text-60: hsla(225, 12%, 82%, 0.6);
   --om-text-50: hsla(225, 12%, 82%, 0.5);
+  --om-text-40: hsla(225, 12%, 82%, 0.4);
   --om-text-30: hsla(225, 12%, 82%, 0.3);
   --om-text-20: hsla(225, 12%, 82%, 0.2);
   --om-text-15: hsla(225, 12%, 82%, 0.15);
@@ -187,24 +189,14 @@
   --bulma-text-strong-l: 92%;
 }
 
-/* Dark-mode tag overrides — ensure legible text on all tag variants */
-[data-theme="dark"] .tag.is-primary,
-[data-theme="dark"] .tag.is-link,
-[data-theme="dark"] .tag.is-info,
-[data-theme="dark"] .tag.is-success,
-[data-theme="dark"] .tag.is-danger,
-[data-theme="dark"] .tag.is-warning {
+/* Dark-mode tag overrides — solid variants need white text; outlined keep Bulma's colored text */
+[data-theme="dark"] .tag.is-primary:not(.is-outlined),
+[data-theme="dark"] .tag.is-link:not(.is-outlined),
+[data-theme="dark"] .tag.is-info:not(.is-outlined),
+[data-theme="dark"] .tag.is-success:not(.is-outlined),
+[data-theme="dark"] .tag.is-danger:not(.is-outlined),
+[data-theme="dark"] .tag.is-warning:not(.is-outlined) {
   color: #fff;
-}
-
-/* Outlined colored tags: colored text + border, transparent bg */
-[data-theme="dark"] .tag.is-primary.is-outlined,
-[data-theme="dark"] .tag.is-link.is-outlined,
-[data-theme="dark"] .tag.is-info.is-outlined,
-[data-theme="dark"] .tag.is-success.is-outlined,
-[data-theme="dark"] .tag.is-danger.is-outlined,
-[data-theme="dark"] .tag.is-warning.is-outlined {
-  color: inherit;  /* let Bulma set the colored text */
 }
 
 /* is-light tags: Bulma's near-white bg is invisible in dark mode */
@@ -451,7 +443,7 @@ html, body { height: 100%; font-size: 14px; }
 }
 
 /* Builder */
-@keyframes pulse-border { 0%, 100% { box-shadow: 0 2px 12px rgba(74,158,255,0.25); } 50% { box-shadow: 0 0 0 3px rgba(74,158,255,0.35), 0 2px 18px rgba(74,158,255,0.4); } }
+@keyframes pulse-border { 0%, 100% { box-shadow: 0 2px 12px var(--om-primary-25); } 50% { box-shadow: 0 0 0 3px var(--om-primary-30), 0 2px 18px var(--om-primary-40); } }
 .btn-generating { animation: pulse-border 1.2s ease-in-out infinite; }
 .htmx-indicator { opacity: 0; transition: opacity 0.2s; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
