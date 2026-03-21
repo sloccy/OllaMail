@@ -120,37 +120,37 @@
 /* ===== C. App Styles ===== */
 
 [data-theme="dark"] {
-  --om-primary: hsl(217, 91%, 60%);
-  --om-primary-70: hsla(217, 91%, 60%, 0.7);
-  --om-primary-50: hsla(217, 91%, 60%, 0.5);
-  --om-primary-40: hsla(217, 91%, 60%, 0.4);
-  --om-primary-30: hsla(217, 91%, 60%, 0.3);
-  --om-primary-25: hsla(217, 91%, 60%, 0.25);
-  --om-primary-08: hsla(217, 91%, 60%, 0.08);
-  --om-primary-06: hsla(217, 91%, 60%, 0.06);
-  --om-primary-05: hsla(217, 91%, 60%, 0.05);
-  --om-text: hsl(220, 13%, 80%);
-  --om-text-60: hsla(220, 13%, 80%, 0.6);
-  --om-text-50: hsla(220, 13%, 80%, 0.5);
-  --om-text-30: hsla(220, 13%, 80%, 0.3);
-  --om-text-20: hsla(220, 13%, 80%, 0.2);
-  --om-text-15: hsla(220, 13%, 80%, 0.15);
-  --om-text-10: hsla(220, 13%, 80%, 0.1);
-  --om-text-08: hsla(220, 13%, 80%, 0.08);
-  --om-success: hsl(158, 64%, 52%);
-  --om-success-70: hsla(158, 64%, 52%, 0.7);
-  --om-success-60: hsla(158, 64%, 52%, 0.6);
-  --om-success-40: hsla(158, 64%, 52%, 0.4);
-  --om-success-20: hsla(158, 64%, 52%, 0.2);
-  --om-success-08: hsla(158, 64%, 52%, 0.08);
+  --om-primary: hsl(225, 84%, 62%);
+  --om-primary-70: hsla(225, 84%, 62%, 0.7);
+  --om-primary-50: hsla(225, 84%, 62%, 0.5);
+  --om-primary-40: hsla(225, 84%, 62%, 0.4);
+  --om-primary-30: hsla(225, 84%, 62%, 0.3);
+  --om-primary-25: hsla(225, 84%, 62%, 0.25);
+  --om-primary-08: hsla(225, 84%, 62%, 0.08);
+  --om-primary-06: hsla(225, 84%, 62%, 0.06);
+  --om-primary-05: hsla(225, 84%, 62%, 0.05);
+  --om-text: hsl(225, 12%, 82%);
+  --om-text-60: hsla(225, 12%, 82%, 0.6);
+  --om-text-50: hsla(225, 12%, 82%, 0.5);
+  --om-text-30: hsla(225, 12%, 82%, 0.3);
+  --om-text-20: hsla(225, 12%, 82%, 0.2);
+  --om-text-15: hsla(225, 12%, 82%, 0.15);
+  --om-text-10: hsla(225, 12%, 82%, 0.1);
+  --om-text-08: hsla(225, 12%, 82%, 0.08);
+  --om-success: hsl(152, 58%, 50%);
+  --om-success-70: hsla(152, 58%, 50%, 0.7);
+  --om-success-60: hsla(152, 58%, 50%, 0.6);
+  --om-success-40: hsla(152, 58%, 50%, 0.4);
+  --om-success-20: hsla(152, 58%, 50%, 0.2);
+  --om-success-08: hsla(152, 58%, 50%, 0.08);
   --om-error: hsl(0, 72%, 51%);
-  --om-bg-200: hsl(222, 28%, 18%);
-  --om-bg-200-95: hsla(222, 28%, 18%, 0.95);
-  --om-bg-300: hsl(222, 32%, 14%);
-  --om-bg-300-85: hsla(222, 32%, 14%, 0.85);
+  --om-bg-200: hsl(228, 30%, 17%);
+  --om-bg-200-95: hsla(228, 30%, 17%, 0.95);
+  --om-bg-300: hsl(228, 35%, 12%);
+  --om-bg-300-85: hsla(228, 35%, 12%, 0.85);
   /* App-specific */
-  --card-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.4);
-  --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px var(--om-primary-25);
+  --card-shadow: 0 1px 4px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.35);
+  --card-shadow-hover: 0 6px 20px rgba(0,0,0,0.55), 0 0 0 1px var(--om-primary-25);
   --card-border: 1px solid var(--om-text-30);
   --hover-subtle-bg: rgba(255,255,255,0.04);
   --sidebar-active-bg: rgba(255,255,255,0.08);
@@ -158,17 +158,44 @@
   --app-muted: var(--om-text-60);
   --app-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --sidebar-glow: 0 0 40px var(--om-primary-06);
+  /* Bulma scheme overrides */
+  --bulma-scheme-h: 228;
+  --bulma-scheme-s: 35%;
+  --bulma-scheme-main-l: 12%;
+  --bulma-scheme-main-bis-l: 15%;
+  --bulma-scheme-main-ter-l: 17%;
+  /* Bulma semantic colors */
+  --bulma-primary-h: 225; --bulma-primary-s: 84%; --bulma-primary-l: 62%;
+  --bulma-link-h: 225;    --bulma-link-s: 84%;    --bulma-link-l: 62%;
+  --bulma-info-h: 225;    --bulma-info-s: 84%;    --bulma-info-l: 62%;
+  --bulma-success-h: 152; --bulma-success-s: 58%; --bulma-success-l: 50%;
+  --bulma-danger-h: 0;    --bulma-danger-s: 72%;  --bulma-danger-l: 51%;
+  /* Bulma component theming */
+  --bulma-card-background-color: rgba(255, 255, 255, 0.07);
+  --bulma-card-shadow: var(--card-shadow), inset 0 1px 0 0 rgba(255,255,255,0.10);
+  --bulma-body-background-color: var(--om-bg-300);
+  --bulma-body-color: var(--om-text);
+  --bulma-body-family: 'Plus Jakarta Sans', sans-serif;
+  --bulma-family-primary: 'Plus Jakarta Sans', sans-serif;
+  --bulma-family-code: var(--app-mono);
+  --bulma-input-background-color: var(--om-bg-300);
+  --bulma-input-border-color: var(--om-text-20);
+  --bulma-input-color: var(--om-text);
+  --bulma-border-l: 25%;
+  --bulma-text-l: 82%;
+  --bulma-text-strong-l: 92%;
 }
 
-body { font-family: 'DM Sans', sans-serif; }
-h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', sans-serif; }
+body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; letter-spacing: -0.01em; }
+h1, h2, h3, h4, h5, h6 { font-family: 'Bricolage Grotesque', sans-serif; letter-spacing: -0.025em; font-weight: 700; }
 
 html, body { height: 100%; font-size: 14px; }
 .layout { display: flex; height: 100vh; overflow: hidden; }
 .sidebar {
   width: 220px; flex-shrink: 0; display: flex; flex-direction: column; padding: 24px 0;
   background: linear-gradient(170deg, var(--om-bg-200-95) 0%, var(--om-bg-300) 60%, var(--om-bg-300-85) 100%);
-  box-shadow: var(--sidebar-glow);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: var(--sidebar-glow), 1px 0 0 rgba(255, 255, 255, 0.03);
 }
 .sidebar-logo { padding: 0 16px 20px; }
 .sidebar-logo img { width: 100%; max-width: 160px; height: auto; display: block; margin: 0 auto; }
@@ -186,6 +213,7 @@ html, body { height: 100%; font-size: 14px; }
   border-left: 2px solid var(--om-primary);
   font-weight: 500;
   box-shadow: inset 0 0 12px var(--om-primary-08);
+  text-shadow: 0 0 12px var(--om-primary-30);
 }
 .sidebar .nav-menu { width: 100% !important; }
 .sidebar .nav-menu li { width: 100%; }
@@ -224,7 +252,7 @@ html, body { height: 100%; font-size: 14px; }
   text-transform: uppercase;
   font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.10em;
   color: var(--om-text-50);
   padding-bottom: 0.5rem;
   padding-left: 0.6rem;
@@ -234,22 +262,22 @@ html, body { height: 100%; font-size: 14px; }
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* Cards — !important overrides Bulma's dark-mode card background */
+/* Cards — Bulma variables set above handle background; custom properties layered here */
 .card {
-  background: rgba(255,255,255,0.07) !important;
-  box-shadow: var(--card-shadow), inset 0 1px 0 0 rgba(255,255,255,0.10) !important;
-  border: var(--card-border, 1px solid transparent) !important;
+  background: rgba(255,255,255,0.07);
+  box-shadow: var(--card-shadow), inset 0 1px 0 0 rgba(255,255,255,0.10);
+  border: var(--card-border, 1px solid transparent);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .card:hover {
-  background: rgba(255,255,255,0.12) !important;
-  box-shadow: var(--card-shadow-hover), inset 0 1px 0 0 rgba(255,255,255,0.10) !important;
+  background: rgba(255,255,255,0.12);
+  box-shadow: var(--card-shadow-hover), inset 0 1px 0 0 rgba(255,255,255,0.10);
   transform: translateY(-1px);
 }
-.account-card { border-left: 3px solid var(--om-text-30) !important; }
+.account-card { border-left: 3px solid var(--om-text-30); }
 .account-card.active {
-  border-left-color: var(--om-success) !important;
-  box-shadow: var(--card-shadow), 0 0 0 1px var(--om-success-20), 0 0 12px var(--om-success-08) !important;
+  border-left-color: var(--om-success);
+  box-shadow: var(--card-shadow), 0 0 0 1px var(--om-success-20), 0 0 12px var(--om-success-08);
 }
 
 /* Drag */
@@ -283,7 +311,7 @@ html, body { height: 100%; font-size: 14px; }
 }
 
 /* History table header */
-.table thead th { text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.08em; font-weight: 600; color: var(--om-text-60); }
+.table thead th { text-transform: uppercase; font-size: 0.6875rem; letter-spacing: 0.10em; font-weight: 600; color: var(--om-text-60); }
 
 /* OAuth */
 .url-box { display: none; }
@@ -315,15 +343,17 @@ html, body { height: 100%; font-size: 14px; }
 }
 .stat:last-child { border-right: none; }
 .stat-title {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--om-text-60);
   margin-bottom: 0.25rem;
 }
 .stat-value {
-  font-size: 1.5rem;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 1.625rem;
   font-weight: 700;
   line-height: 1.2;
+  letter-spacing: -0.03em;
   margin-bottom: 0.25rem;
 }
 .stat-desc {
@@ -379,7 +409,13 @@ html, body { height: 100%; font-size: 14px; }
   border-bottom: 1px solid var(--om-text-10);
   background: linear-gradient(to bottom, transparent, transparent) padding-box,
               linear-gradient(to right, var(--om-primary-30), transparent) border-box;
-  border-image: linear-gradient(to right, var(--om-primary-40), var(--om-text-08)) 1;
+  border-image: linear-gradient(to right, var(--om-primary-30), transparent 80%) 1;
+}
+
+/* Input focus glow */
+.input:focus, .textarea:focus, .select select:focus {
+  border-color: var(--om-primary-50);
+  box-shadow: 0 0 0 2px var(--om-primary-08);
 }
 
 /* Builder */
