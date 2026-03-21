@@ -297,7 +297,7 @@ html, body { height: 100%; font-size: 14px; }
 .input, .textarea, .select { width: 100%; }
 .textarea { min-height: 10rem; }
 
-/* Stats component (custom — replaces DaisyUI .stats/.stat) */
+/* Stats component (custom — Bulma has no stats widget) */
 .stats {
   display: flex;
   flex-wrap: wrap;
@@ -336,7 +336,7 @@ html, body { height: 100%; font-size: 14px; }
 .stat-accent-success { border-left: 3px solid var(--om-success-70); }
 .stat-accent-neutral { border-left: 3px solid var(--om-text-20); }
 
-/* Timeline (custom — replaces DaisyUI .timeline) */
+/* Timeline (custom — Bulma has no timeline component) */
 .timeline { list-style: none; padding: 0; margin: 0; }
 .timeline li { display: grid; grid-template-columns: 20px 1fr; gap: 0 0.75rem; align-items: start; }
 .timeline-middle { display: flex; justify-content: center; padding-top: 0.3rem; }
@@ -347,13 +347,13 @@ html, body { height: 100%; font-size: 14px; }
 .timeline-log-entry { transition: background 0.12s ease; border-radius: 4px; }
 .timeline-log-entry:hover { background: var(--hover-subtle-bg); }
 
-/* Toast (custom — replaces DaisyUI .toast positioning) */
+/* Toast (custom positioning — Bulma .notification handles styling) */
 .toast { position: fixed; bottom: 1rem; right: 1rem; z-index: 50; }
 
-/* Tag dot (tiny colored dot for timeline — replaces badge-xs) */
+/* Tag dot (tiny colored dot for timeline — extends Bulma .tag) */
 .tag-dot { width: 8px; height: 8px; padding: 0; min-width: 0; border-radius: 50%; display: inline-block; }
 
-/* Switch/toggle (custom — replaces DaisyUI .toggle) */
+/* Switch/toggle (custom — Bulma has no toggle switch) */
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
 .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
 .switch-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--om-text-20); border-radius: 24px; transition: 0.3s; }
@@ -361,7 +361,7 @@ html, body { height: 100%; font-size: 14px; }
 .switch input:checked + .switch-slider { background: var(--om-primary); }
 .switch input:checked + .switch-slider::before { transform: translateX(20px); }
 
-/* Skeleton (custom — replaces DaisyUI .skeleton) */
+/* Skeleton (custom — Bulma has no skeleton loader) */
 @keyframes skeleton-pulse {
   0%, 100% { background-color: var(--om-bg-200); }
   50% { background-color: var(--om-bg-300); }
