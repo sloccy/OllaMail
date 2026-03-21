@@ -1,4 +1,3 @@
-import json
 from app import db, gmail_client
 from app.llm.base import LLMProvider
 from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS
@@ -11,13 +10,14 @@ def process_account(account: dict, prompts: list, provider: LLMProvider):
     email_addr = account["email"]
 
     creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-    if json.loads(refreshed_creds) != json.loads(account["credentials_json"]):
+    if refreshed_creds != account["credentials_json"]:
         db.update_account_credentials(account_id, refreshed_creds)
 
     emails = gmail_client.fetch_recent_emails(
         creds, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
     )
-    new_emails = [e for e in emails if not db.is_processed(account_id, e["id"])]
+    unprocessed_ids = set(db.filter_unprocessed(account_id, [e["id"] for e in emails]))
+    new_emails = [e for e in emails if e["id"] in unprocessed_ids]
 
     if not new_emails:
         db.add_log("INFO", f"[{email_addr}] No new emails to process.")

@@ -1,4 +1,5 @@
 import json
+import re
 import requests
 from app import db
 
@@ -203,6 +204,5 @@ No explanation, no markdown, just the JSON object."""
         response.raise_for_status()
         content = response.json().get("message", {}).get("content", "").strip()
         # Strip think blocks in case model includes them despite stream=False
-        import re
         content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
         return content

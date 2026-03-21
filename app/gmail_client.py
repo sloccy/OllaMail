@@ -3,6 +3,7 @@ import json
 import base64
 import time
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import datetime
@@ -114,19 +115,21 @@ def fetch_recent_emails(creds, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMA
         "q": f"in:inbox after:{after_ts}",
     })
     messages = response.get("messages", [])
-    emails = []
-    for msg in messages:
+
+    def fetch_one(msg):
         full = _gmail_request("GET", f"messages/{msg['id']}", creds, params={"format": "full"})
         headers = {h["name"]: h["value"] for h in full["payload"]["headers"]}
         body = _extract_body(full["payload"])
-        emails.append({
+        return {
             "id": msg["id"],
             "subject": headers.get("Subject", "(no subject)"),
             "sender": headers.get("From", "unknown"),
             "snippet": full.get("snippet", ""),
             "body": body[:EMAIL_BODY_TRUNCATION],
-        })
-    return emails
+        }
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        return list(executor.map(fetch_one, messages))
 
 
 def apply_label(creds, message_id: str, label_id: str):
@@ -177,6 +180,22 @@ def fetch_emails_older_than(creds, days: int, label_name: str = None, excluded_l
         if not page_token:
             break
     return ids
+
+
+def batch_trash_emails(creds, message_ids: list) -> int:
+    """Trash emails in bulk using Gmail's batchModify endpoint (up to 1000 per request)."""
+    if not message_ids:
+        return 0
+    total = 0
+    for i in range(0, len(message_ids), 1000):
+        chunk = message_ids[i:i + 1000]
+        _gmail_request("POST", "messages/batchModify", creds, json={
+            "ids": chunk,
+            "addLabelIds": ["TRASH"],
+            "removeLabelIds": ["INBOX"],
+        })
+        total += len(chunk)
+    return total
 
 
 def mark_email_read(creds, message_id: str):

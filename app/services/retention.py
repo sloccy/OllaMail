@@ -15,16 +15,13 @@ def cleanup_retention(account: dict, creds) -> None:
             if rule["label_name"].lower() in exempt_names:
                 continue
             ids = gmail_client.fetch_emails_older_than(creds, rule["days"], rule["label_name"])
-            newly_trashed = 0
-            for msg_id in ids:
-                if msg_id not in trashed_ids:
-                    gmail_client.trash_email(creds, msg_id)
-                    trashed_ids.add(msg_id)
-                    newly_trashed += 1
-            if newly_trashed:
+            new_ids = [i for i in ids if i not in trashed_ids]
+            if new_ids:
+                gmail_client.batch_trash_emails(creds, new_ids)
+                trashed_ids.update(new_ids)
                 db.add_log(
                     "INFO",
-                    f"[{email_addr}] Retention: trashed {newly_trashed} email(s) with label "
+                    f"[{email_addr}] Retention: trashed {len(new_ids)} email(s) with label "
                     f"'{rule['label_name']}' older than {rule['days']} day(s).",
                 )
 
@@ -34,9 +31,8 @@ def cleanup_retention(account: dict, creds) -> None:
                 creds, retention["global_days"], excluded_labels=excluded
             )
             new_ids = [i for i in ids if i not in trashed_ids]
-            for msg_id in new_ids:
-                gmail_client.trash_email(creds, msg_id)
             if new_ids:
+                gmail_client.batch_trash_emails(creds, new_ids)
                 db.add_log(
                     "INFO",
                     f"[{email_addr}] Retention: trashed {len(new_ids)} email(s) older than "
