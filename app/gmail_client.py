@@ -3,6 +3,8 @@ import json
 import base64
 import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import datetime
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -18,7 +20,15 @@ CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "/credentials/credentials.json"
 REDIRECT_URI = "http://localhost"
 GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 
+_retry = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=None,
+    raise_on_status=False,
+)
 _session = requests.Session()
+_session.mount("https://", HTTPAdapter(max_retries=_retry))
 
 
 def get_auth_url(state: str) -> str:
