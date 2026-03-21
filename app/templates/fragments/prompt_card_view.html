@@ -4,7 +4,7 @@
      ondragover="onDragOver(event)"
      ondragleave="onDragLeave(event)"
      ondrop="onDrop(event)">
-  <div class="card-body">
+  <div class="card-content">
     <div class="u-flex u-items-start u-justify-between u-gap-3">
       <div class="drag-handle" title="Drag to reorder" draggable="true"
            ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
@@ -13,35 +13,35 @@
         <div class="font-semibold u-mb-1">{{ p.name|e }}</div>
         <div class="font-mono text-sm u-text-muted u-mb-2">Created {{ p.created_at|fmtdate }}</div>
         <div class="u-mb-2">
-          <span class="badge badge-primary border u-border-primary-subtle font-mono">&#9654; {{ p.label_name|e }}</span>
+          <span class="tag is-primary border u-border-primary-subtle font-mono">&#9654; {{ p.label_name|e }}</span>
           {% if p.active %}
-            <span class="badge badge-success u-ml-1">&#9679; active</span>
+            <span class="tag is-success u-ml-1">&#9679; active</span>
           {% else %}
-            <span class="badge badge-secondary u-ml-1">paused</span>
+            <span class="tag is-info u-ml-1">paused</span>
           {% endif %}
           {% if p.account_id %}
-            <span class="badge badge-primary badge-outline u-ml-1">{{ account_map.get(p.account_id, 'account ' ~ p.account_id)|e }}</span>
+            <span class="tag is-primary is-outlined u-ml-1">{{ account_map.get(p.account_id, 'account ' ~ p.account_id)|e }}</span>
           {% else %}
-            <span class="badge badge-secondary badge-outline u-ml-1">global</span>
+            <span class="tag is-info is-outlined u-ml-1">global</span>
           {% endif %}
-          {% if p.action_archive %}<span class="badge badge-ghost badge-outline u-ml-1">archive</span>{% endif %}
-          {% if p.action_spam %}<span class="badge badge-error u-ml-1">spam</span>{% endif %}
-          {% if p.action_trash %}<span class="badge badge-ghost badge-outline u-ml-1">&#128465; trash</span>{% endif %}
-          {% if p.action_mark_read %}<span class="badge badge-ghost badge-outline u-ml-1">mark read</span>{% endif %}
-          {% if p.stop_processing %}<span class="badge badge-error u-ml-1">&#9940; stop</span>{% endif %}
+          {% if p.action_archive %}<span class="tag is-light is-outlined u-ml-1">archive</span>{% endif %}
+          {% if p.action_spam %}<span class="tag is-danger u-ml-1">spam</span>{% endif %}
+          {% if p.action_trash %}<span class="tag is-light is-outlined u-ml-1">&#128465; trash</span>{% endif %}
+          {% if p.action_mark_read %}<span class="tag is-light is-outlined u-ml-1">mark read</span>{% endif %}
+          {% if p.stop_processing %}<span class="tag is-danger u-ml-1">&#9940; stop</span>{% endif %}
         </div>
         <div class="text-sm u-text-muted u-leading-relaxed border-t u-border-subtle u-mt-2 u-pt-2">{{ p.instructions|e }}</div>
       </div>
       <div class="u-flex u-gap-2 u-flex-shrink-0 u-self-start">
-        <button class="btn btn-outline btn-secondary btn-sm"
+        <button class="button is-outlined is-info is-small"
           hx-post="/fragments/prompts/{{ p.id }}/toggle"
           hx-target="#prompt-card-{{ p.id }}"
           hx-swap="outerHTML">{{ 'Pause' if p.active else 'Resume' }}</button>
-        <button class="btn btn-outline btn-secondary btn-sm"
+        <button class="button is-outlined is-info is-small"
           hx-get="/fragments/prompts/{{ p.id }}/edit"
           hx-target="#prompt-card-{{ p.id }}"
           hx-swap="outerHTML">Edit</button>
-        <button class="btn btn-outline btn-error btn-sm"
+        <button class="button is-outlined is-danger is-small"
           hx-delete="/fragments/prompts/{{ p.id }}"
           hx-target="#prompts-list"
           hx-swap="innerHTML"
