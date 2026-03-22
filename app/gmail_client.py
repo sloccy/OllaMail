@@ -136,20 +136,6 @@ def fetch_message_details(creds, message_ids: list) -> list:
         return list(executor.map(fetch_one, message_ids))
 
 
-def modify_email(creds, message_id: str, add_label_ids: list = None, remove_label_ids: list = None):
-    """Single modify call combining label additions and removals."""
-    body = {}
-    if add_label_ids:
-        body["addLabelIds"] = add_label_ids
-    if remove_label_ids:
-        body["removeLabelIds"] = remove_label_ids
-    if body:
-        _gmail_request("POST", f"messages/{message_id}/modify", creds, json=body)
-
-
-def trash_email(creds, message_id: str):
-    _gmail_request("POST", f"messages/{message_id}/trash", creds)
-
 
 def list_labels(creds) -> list:
     cache_key = creds.refresh_token
@@ -202,28 +188,21 @@ def batch_modify_emails(creds, modifications: list) -> None:
         key = (tuple(sorted(add_labels)), tuple(sorted(remove_labels)))
         groups.setdefault(key, []).append(message_id)
     for (add_labels, remove_labels), message_ids in groups.items():
-        body: dict = {"ids": message_ids}
-        if add_labels:
-            body["addLabelIds"] = list(add_labels)
-        if remove_labels:
-            body["removeLabelIds"] = list(remove_labels)
-        _gmail_request("POST", "messages/batchModify", creds, json=body)
+        for i in range(0, len(message_ids), 1000):
+            body: dict = {"ids": message_ids[i:i + 1000]}
+            if add_labels:
+                body["addLabelIds"] = list(add_labels)
+            if remove_labels:
+                body["removeLabelIds"] = list(remove_labels)
+            _gmail_request("POST", "messages/batchModify", creds, json=body)
 
 
 def batch_trash_emails(creds, message_ids: list) -> int:
     """Trash emails in bulk using Gmail's batchModify endpoint (up to 1000 per request)."""
     if not message_ids:
         return 0
-    total = 0
-    for i in range(0, len(message_ids), 1000):
-        chunk = message_ids[i:i + 1000]
-        _gmail_request("POST", "messages/batchModify", creds, json={
-            "ids": chunk,
-            "addLabelIds": ["TRASH"],
-            "removeLabelIds": ["INBOX"],
-        })
-        total += len(chunk)
-    return total
+    batch_modify_emails(creds, [(mid, ["TRASH"], ["INBOX"]) for mid in message_ids])
+    return len(message_ids)
 
 
 def _extract_body(payload) -> str:
