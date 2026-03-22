@@ -3,7 +3,6 @@ import html as _html
 import io
 import json
 import secrets
-import threading
 import time as _time
 from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs
@@ -73,22 +72,20 @@ def index():
 
 
 def _ensure_label_for_accounts(account_id, label_name):
-    def _do():
-        if account_id is not None:
-            accounts = [db.get_account(account_id)]
-        else:
-            accounts = [a for a in db.list_accounts() if a.get("active")]
-        for account in accounts:
-            if not account:
-                continue
-            try:
-                creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-                if refreshed_creds != account["credentials_json"]:
-                    db.update_account_credentials(account["id"], refreshed_creds)
-                gmail_client.build_label_cache(creds, [label_name])
-            except Exception as e:
-                db.add_log("WARNING", f"Could not pre-create label '{label_name}' for account {account.get('id')}: {e}")
-    threading.Thread(target=_do, daemon=True).start()
+    if account_id is not None:
+        accounts = [db.get_account(account_id)]
+    else:
+        accounts = [a for a in db.list_accounts() if a.get("active")]
+    for account in accounts:
+        if not account:
+            continue
+        try:
+            creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+            if refreshed_creds != account["credentials_json"]:
+                db.update_account_credentials(account["id"], refreshed_creds)
+            gmail_client.build_label_cache(creds, [label_name])
+        except Exception as e:
+            db.add_log("WARNING", f"Could not pre-create label '{label_name}' for account {account.get('id')}: {e}")
 
 
 # ---- API routes (fetch / download) ----
@@ -430,10 +427,9 @@ def frag_toggle_prompt(prompt_id):
     )
     p = db.get_prompt(prompt_id)
     accounts = _safe_accounts()
-    account_map = {a["id"]: a["email"] for a in accounts}
     msg = "Rule paused." if not new_active else "Rule resumed."
     return fragment_response("fragments/prompt_card_view.html",
-                             {"p": p, "accounts": accounts, "account_map": account_map},
+                             {"p": p, "accounts": accounts},
                              toast=msg)
 
 
@@ -443,9 +439,7 @@ def frag_prompt_edit(prompt_id):
     if not p:
         return "", 404
     accounts = _safe_accounts()
-    account_map = {a["id"]: a["email"] for a in accounts}
-    return fragment_response("fragments/prompt_card_edit.html",
-                             {"p": p, "accounts": accounts, "account_map": account_map})
+    return fragment_response("fragments/prompt_card_edit.html", {"p": p, "accounts": accounts})
 
 
 @app.route("/fragments/prompts/<int:prompt_id>/view")
@@ -454,9 +448,7 @@ def frag_prompt_view(prompt_id):
     if not p:
         return "", 404
     accounts = _safe_accounts()
-    account_map = {a["id"]: a["email"] for a in accounts}
-    return fragment_response("fragments/prompt_card_view.html",
-                             {"p": p, "accounts": accounts, "account_map": account_map})
+    return fragment_response("fragments/prompt_card_view.html", {"p": p, "accounts": accounts})
 
 
 @app.route("/fragments/settings")
