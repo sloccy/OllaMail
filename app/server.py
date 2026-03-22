@@ -63,6 +63,8 @@ def compress_response(response):
         return response
     if "Content-Encoding" in response.headers:
         return response
+    if response.direct_passthrough:
+        return response
     data = response.get_data()
     if len(data) < 500:
         return response
