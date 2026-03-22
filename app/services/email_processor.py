@@ -11,7 +11,7 @@ def process_account(account: dict, prompts: list, provider: LLMProvider):
     email_addr = account["email"]
 
     creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-    if refreshed_creds != account["credentials_json"]:
+    if refreshed_creds is not None:
         db.update_account_credentials(account_id, refreshed_creds)
 
     all_ids = gmail_client.list_recent_message_ids(
@@ -30,20 +30,33 @@ def process_account(account: dict, prompts: list, provider: LLMProvider):
     unique_labels = list({p["label_name"] for p in prompts})
     label_cache = gmail_client.build_label_cache(creds, unique_labels)
 
+    all_modifies = []  # (message_id, add_labels, remove_labels)
+    all_trashes = []   # message_ids
+
     for email in new_emails:
-        _process_email(email, account_id, email_addr, prompts, label_cache, creds, provider)
+        modifies, trashes = _process_email(email, account_id, email_addr, prompts, label_cache, provider)
+        all_modifies.extend(modifies)
+        all_trashes.extend(trashes)
+
+    if all_trashes:
+        gmail_client.batch_trash_emails(creds, all_trashes)
+    if all_modifies:
+        gmail_client.batch_modify_emails(creds, all_modifies)
 
     db.update_last_scan(account_id)
     return creds
 
 
 def _process_email(email: dict, account_id: int, email_addr: str,
-                   prompts: list, label_cache: dict, creds, provider: LLMProvider) -> None:
+                   prompts: list, label_cache: dict, provider: LLMProvider) -> tuple:
+    """Classify an email and write DB records. Returns (modifies, trashes) for batched Gmail calls."""
+    modifies = []
+    trashes = []
     try:
         email_results = provider.classify_email_batch(email, prompts)
         stop = False
 
-        # Collect Gmail API calls and DB writes; apply all DB writes in one transaction.
+        # Collect DB writes; apply all in one transaction.
         pending_logs = []
         pending_cats = []
 
@@ -74,9 +87,9 @@ def _process_email(email: dict, account_id: int, email_addr: str,
                     actions_taken.append("marked as read")
 
                 if use_trash:
-                    gmail_client.trash_email(creds, email["id"])
+                    trashes.append(email["id"])
                 else:
-                    gmail_client.modify_email(creds, email["id"], add_labels, remove_labels)
+                    modifies.append((email["id"], add_labels, remove_labels))
 
                 if prompt.get("stop_processing"):
                     actions_taken.append("stopped further rules")
@@ -119,3 +132,6 @@ def _process_email(email: dict, account_id: int, email_addr: str,
     except Exception as e:
         db.add_log("ERROR", f"[{email_addr}] Error processing email '{email.get('subject', '?')[:60]}': {e}")
         db.mark_processed(account_id, email["id"])  # prevent infinite retry on persistent failures
+        return [], []
+
+    return modifies, trashes

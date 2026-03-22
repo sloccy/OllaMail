@@ -11,6 +11,8 @@ _scan_lock = threading.Lock()
 _status_lock = threading.Lock()
 _thread = None
 _status = {"running": False, "last_run": None, "next_run": None}
+_last_cleanup = 0.0
+_CLEANUP_INTERVAL = 3600  # run trim operations at most once per hour
 
 
 def get_status():
@@ -64,9 +66,13 @@ def _scan_all_accounts():
 
 
 def _run_scan():
+    global _last_cleanup
     _set_status(last_run=time.time())
-    db.trim_logs()
-    db.trim_processed_emails(GMAIL_LOOKBACK_HOURS)
+    now = time.time()
+    if now - _last_cleanup >= _CLEANUP_INTERVAL:
+        db.trim_logs()
+        db.trim_processed_emails(GMAIL_LOOKBACK_HOURS)
+        _last_cleanup = now
     accounts = [a for a in db.list_accounts() if a["active"]]
 
     if not accounts:

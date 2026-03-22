@@ -65,11 +65,13 @@ def _get_email(creds: Credentials) -> str:
 
 
 def get_service(credentials_json: str):
-    """Load and refresh credentials. Returns (creds, refreshed_json)."""
+    """Load and refresh credentials. Returns (creds, refreshed_json_or_None).
+    refreshed_json is None when no refresh was needed."""
     creds = Credentials.from_authorized_user_info(json.loads(credentials_json), SCOPES)
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
-    return creds, creds.to_json()
+        return creds, creds.to_json()
+    return creds, None
 
 
 def _gmail_request(method, path, creds, **kwargs):
@@ -186,6 +188,26 @@ def fetch_emails_older_than(creds, days: int, label_name: str = None, excluded_l
         if not page_token:
             break
     return ids
+
+
+def batch_modify_emails(creds, modifications: list) -> None:
+    """Apply label modifications to multiple messages using batchModify.
+    modifications: list of (message_id, add_labels, remove_labels) tuples.
+    Groups by identical add/remove combos and sends one batchModify per group.
+    """
+    if not modifications:
+        return
+    groups: dict = {}
+    for message_id, add_labels, remove_labels in modifications:
+        key = (tuple(sorted(add_labels)), tuple(sorted(remove_labels)))
+        groups.setdefault(key, []).append(message_id)
+    for (add_labels, remove_labels), message_ids in groups.items():
+        body: dict = {"ids": message_ids}
+        if add_labels:
+            body["addLabelIds"] = list(add_labels)
+        if remove_labels:
+            body["removeLabelIds"] = list(remove_labels)
+        _gmail_request("POST", "messages/batchModify", creds, json=body)
 
 
 def batch_trash_emails(creds, message_ids: list) -> int:

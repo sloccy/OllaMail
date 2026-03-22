@@ -120,7 +120,7 @@
       </div>
       <div id="accounts-list"
         hx-get="/fragments/accounts"
-        hx-trigger="load"
+        hx-trigger="intersect once"
         hx-swap="innerHTML">
         <div class="u-flex u-flex-col u-gap-3 u-p-2">
           <div class="skeleton h-20 w-full rounded-xl"></div>
@@ -145,7 +145,7 @@
         <div class="select is-small u-w-auto">
           <select id="prompt-filter-account" name="account_id"
             hx-get="/fragments/account-options?type=filter"
-            hx-trigger="load"
+            hx-trigger="intersect once"
             hx-swap="innerHTML"
             hx-on:htmx:after-swap="syncAccountSelects()">
           </select>
@@ -203,7 +203,7 @@
 
       <div id="prompts-list"
         hx-get="/fragments/prompts"
-        hx-trigger="load, change from:#prompt-filter-account"
+        hx-trigger="intersect once, change from:#prompt-filter-account"
         hx-include="#prompt-filter-account"
         hx-swap="innerHTML">
         <div class="u-flex u-flex-col u-gap-3 u-p-2">
@@ -254,7 +254,7 @@
       <div style="max-width:520px;">
         <div id="settings-container"
           hx-get="/fragments/settings"
-          hx-trigger="load"
+          hx-trigger="intersect once"
           hx-swap="innerHTML">
           <div class="u-flex u-flex-col u-gap-3 u-p-2">
             <div class="skeleton h-10 w-full rounded-lg"></div>
@@ -293,7 +293,7 @@
       </div>
       <div id="logs-content"
         hx-get="/fragments/logs"
-        hx-trigger="load"
+        hx-trigger="intersect once"
         hx-swap="innerHTML">
         <div class="u-flex u-flex-col u-gap-2 u-p-2">
           <div class="skeleton h-7 w-full"></div>
@@ -312,7 +312,7 @@
       </div>
       <form id="hist-filter-form" class="u-flex u-flex-wrap u-gap-3 u-mb-4 u-items-end"
         hx-get="/fragments/history/filters"
-        hx-trigger="load"
+        hx-trigger="intersect once"
         hx-swap="innerHTML">
         <div class="u-flex u-gap-3">
           <div class="skeleton h-9 w-40 rounded-lg"></div>
@@ -335,7 +335,7 @@
           </thead>
           <tbody id="hist-body"
             hx-get="/fragments/history"
-            hx-trigger="load"
+            hx-trigger="intersect once"
             hx-swap="innerHTML">
             <tr><td colspan="7"><div class="text-center u-text-muted u-py-5"><div class="u-text-2xl opacity-25 u-mb-2"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 10v6l4 3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>No history yet. Labels will appear here after emails are scanned.</div></td></tr>
           </tbody>
