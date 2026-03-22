@@ -1,5 +1,3 @@
-{% set account_map = {} %}
-{% for a in accounts %}{% set _ = account_map.update({a.id: a.email}) %}{% endfor %}
 <div class="card u-mb-3" id="prompt-card-{{ p.id }}" data-id="{{ p.id }}"
      ondragover="onDragOver(event)"
      ondragleave="onDragLeave(event)"

@@ -7,7 +7,8 @@
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500&family=Bricolage+Grotesque:opsz,wght@12..96,700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500&family=Bricolage+Grotesque:opsz,wght@12..96,700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500&family=Bricolage+Grotesque:opsz,wght@12..96,700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"></noscript>
   <link href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" rel="stylesheet" type="text/css">
   <!-- No Tailwind runtime — all utilities are in static/style.css. Bulma component classes come from bulma.min.css. -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -52,16 +53,16 @@
       </div>
       <div id="dashboard-content"
         hx-get="/fragments/dashboard"
-        hx-trigger="load, every 30s"
+        hx-trigger="load, every 30s [document.getElementById('page-dashboard').classList.contains('active')]"
         hx-swap="innerHTML">
-        <div class="flex flex-col gap-3 p-2">
-          <div class="flex gap-3">
+        <div class="u-flex u-flex-col u-gap-3 u-p-2">
+          <div class="u-flex u-gap-3">
             <div class="skeleton h-20 flex-1 rounded-xl"></div>
             <div class="skeleton h-20 flex-1 rounded-xl"></div>
             <div class="skeleton h-20 flex-1 rounded-xl"></div>
             <div class="skeleton h-20 flex-1 rounded-xl"></div>
           </div>
-          <div class="skeleton h-4 w-32 mt-2"></div>
+          <div class="skeleton h-4 w-32 u-mt-2"></div>
           <div class="skeleton h-8 w-full"></div>
           <div class="skeleton h-8 w-full"></div>
           <div class="skeleton h-8 w-3/4"></div>
@@ -79,7 +80,7 @@
         <h6 class="text-primary u-mb-3">Connect a Gmail Account</h6>
         <div>
           <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-1">
-            <div class="tag is-primary is-outlined font-mono w-7 h-7 flex-shrink-0 mt-0.5">1</div>
+            <div class="tag is-primary is-outlined font-mono w-7 h-7 u-flex-shrink-0 mt-0.5">1</div>
             <div class="u-flex-grow">
               <div class="font-medium u-mb-2">Generate authorization link</div>
               <div class="text-sm u-text-muted u-mb-2 u-leading-relaxed">Click below to generate a Google authorization URL.</div>
@@ -91,7 +92,7 @@
             </div>
           </div>
           <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-2">
-            <div class="tag is-primary is-outlined font-mono w-7 h-7 flex-shrink-0 mt-0.5">2</div>
+            <div class="tag is-primary is-outlined font-mono w-7 h-7 u-flex-shrink-0 mt-0.5">2</div>
             <div id="oauth-step-2-body">
               <div class="u-flex-grow">
                 <div class="font-medium u-mb-2">Open the link and approve access</div>
@@ -100,7 +101,7 @@
             </div>
           </div>
           <div class="u-flex u-gap-3 u-mb-4" id="oauth-step-3">
-            <div class="tag is-primary is-outlined font-mono w-7 h-7 flex-shrink-0 mt-0.5">3</div>
+            <div class="tag is-primary is-outlined font-mono w-7 h-7 u-flex-shrink-0 mt-0.5">3</div>
             <div class="u-flex-grow">
               <div class="font-medium u-mb-2">Paste the redirect URL</div>
               <div class="text-sm u-text-muted u-mb-2 u-leading-relaxed">After approving, your browser will redirect to <code class="font-mono">http://localhost/?code=...</code> which fails to load. Copy the full URL from your address bar and paste it here.</div>
@@ -121,7 +122,7 @@
         hx-get="/fragments/accounts"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="flex flex-col gap-3 p-2">
+        <div class="u-flex u-flex-col u-gap-3 u-p-2">
           <div class="skeleton h-20 w-full rounded-xl"></div>
           <div class="skeleton h-20 w-full rounded-xl"></div>
         </div>
@@ -145,7 +146,8 @@
           <select id="prompt-filter-account" name="account_id"
             hx-get="/fragments/account-options?type=filter"
             hx-trigger="load"
-            hx-swap="innerHTML">
+            hx-swap="innerHTML"
+            hx-on:htmx:after-swap="syncAccountSelects()">
           </select>
         </div>
       </div>
@@ -170,10 +172,7 @@
           <div class="u-mb-3">
             <label class="form-label">Apply to account</label>
             <div class="select is-small">
-              <select name="account_id" id="new-prompt-account"
-                hx-get="/fragments/account-options?type=new-prompt"
-                hx-trigger="load"
-                hx-swap="innerHTML">
+              <select name="account_id" id="new-prompt-account">
               </select>
             </div>
             <div class="form-text">Global rules run on every account. Account-specific rules only run for that account.</div>
@@ -207,7 +206,7 @@
         hx-trigger="load, change from:#prompt-filter-account"
         hx-include="#prompt-filter-account"
         hx-swap="innerHTML">
-        <div class="flex flex-col gap-3 p-2">
+        <div class="u-flex u-flex-col u-gap-3 u-p-2">
           <div class="skeleton h-24 w-full rounded-xl"></div>
           <div class="skeleton h-24 w-full rounded-xl"></div>
           <div class="skeleton h-24 w-3/4 rounded-xl"></div>
@@ -257,7 +256,7 @@
           hx-get="/fragments/settings"
           hx-trigger="load"
           hx-swap="innerHTML">
-          <div class="flex flex-col gap-3 p-2">
+          <div class="u-flex u-flex-col u-gap-3 u-p-2">
             <div class="skeleton h-10 w-full rounded-lg"></div>
             <div class="skeleton h-10 w-full rounded-lg"></div>
             <div class="skeleton h-10 w-3/4 rounded-lg"></div>
@@ -296,7 +295,7 @@
         hx-get="/fragments/logs"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="flex flex-col gap-2 p-2">
+        <div class="u-flex u-flex-col u-gap-2 u-p-2">
           <div class="skeleton h-7 w-full"></div>
           <div class="skeleton h-7 w-full"></div>
           <div class="skeleton h-7 w-full"></div>
@@ -315,7 +314,7 @@
         hx-get="/fragments/history/filters"
         hx-trigger="load"
         hx-swap="innerHTML">
-        <div class="flex gap-3">
+        <div class="u-flex u-gap-3">
           <div class="skeleton h-9 w-40 rounded-lg"></div>
           <div class="skeleton h-9 w-40 rounded-lg"></div>
           <div class="skeleton h-9 w-32 rounded-lg"></div>
@@ -352,10 +351,7 @@
       <div class="u-flex u-items-center u-gap-3 u-mb-4">
         <label class="form-label u-mb-0">Account</label>
         <div class="select is-small u-w-auto">
-          <select id="retention-account-select" name="account_id"
-            hx-get="/fragments/account-options?type=retention"
-            hx-trigger="load"
-            hx-swap="innerHTML">
+          <select id="retention-account-select" name="account_id">
           </select>
         </div>
       </div>
@@ -372,6 +368,18 @@
 <div id="toast" class="toast toast-end z-50 transition-opacity duration-300 opacity-0 pointer-events-none"></div>
 
 <script>
+  // ---- Sync account selects ----
+  function syncAccountSelects() {
+    const src = document.getElementById('prompt-filter-account');
+    const accountOptions = [...src.querySelectorAll('option')].slice(1).map(o => o.outerHTML).join('');
+
+    const newPrompt = document.getElementById('new-prompt-account');
+    if (newPrompt) newPrompt.innerHTML = '<option value="">All accounts (global)</option>' + accountOptions;
+
+    const retention = document.getElementById('retention-account-select');
+    if (retention) retention.innerHTML = '<option value="">\u2026Select an account\u2026</option>' + accountOptions;
+  }
+
   // ---- Toast ----
   let _toastTimer;
   function toast(msg, type = 'success') {
@@ -455,11 +463,12 @@
     });
     if (!resp.ok) {
       toast('Failed to save order.', 'error');
-    } else {
+      // Re-fetch to restore the correct server-side order
       const accountId = document.getElementById('prompt-filter-account')?.value || '';
       const url = accountId ? `/fragments/prompts?account_id=${accountId}` : '/fragments/prompts';
       htmx.ajax('GET', url, { target: '#prompts-list', swap: 'innerHTML' });
     }
+    // On success: DOM already reflects correct order — no re-fetch needed
   }
 
   // ---- Builder SSE ----
