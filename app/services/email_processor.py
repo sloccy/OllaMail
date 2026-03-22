@@ -30,8 +30,8 @@ def process_account(account: dict, prompts: list, provider: LLMProvider):
     unique_labels = list({p["label_name"] for p in prompts})
     label_cache = gmail_client.build_label_cache(creds, unique_labels)
 
-    all_modifies = []  # (message_id, add_labels, remove_labels)
-    all_trashes = []   # message_ids
+    all_modifies = []
+    all_trashes = []
 
     for email in new_emails:
         modifies, trashes = _process_email(email, account_id, email_addr, prompts, label_cache, provider)
