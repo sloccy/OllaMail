@@ -1,4 +1,5 @@
 import csv
+import gzip
 import html as _html
 import io
 import json
@@ -15,6 +16,8 @@ from app.config import (POLL_INTERVAL, OLLAMA_MODEL, OLLAMA_HOST, OLLAMA_TIMEOUT
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = "placeholder-replaced-at-startup"
+
+_gzip_cache = {}
 
 
 # ---- Fragment helpers ----
@@ -50,6 +53,30 @@ def _fmt_retention(days):
 app.jinja_env.filters["fmtdate"] = _fmt_date
 app.jinja_env.filters["fmtinterval"] = _fmt_interval
 app.jinja_env.filters["fmtretention"] = _fmt_retention
+
+
+@app.after_request
+def compress_response(response):
+    if "gzip" not in request.headers.get("Accept-Encoding", ""):
+        return response
+    if response.status_code < 200 or response.status_code >= 300:
+        return response
+    if "Content-Encoding" in response.headers:
+        return response
+    data = response.get_data()
+    if len(data) < 500:
+        return response
+    if request.path.startswith("/static/"):
+        if request.path not in _gzip_cache:
+            _gzip_cache[request.path] = gzip.compress(data)
+        compressed = _gzip_cache[request.path]
+    else:
+        compressed = gzip.compress(data)
+    response.set_data(compressed)
+    response.headers["Content-Encoding"] = "gzip"
+    response.headers["Content-Length"] = len(compressed)
+    response.headers["Vary"] = "Accept-Encoding"
+    return response
 
 
 def fragment_response(template, ctx, toast=None):
