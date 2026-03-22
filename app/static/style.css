@@ -451,17 +451,27 @@ html, body { height: 100%; font-size: 14px; }
 /* ===== D. Tailwind-replacement utilities =====
    These replace utility class usage. Add new classes here as needed. */
 
+/* Display */
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+
 /* Flex */
+.flex-col { flex-direction: column; }
 .flex-1 { flex: 1 1 0%; }
+.flex-shrink-0 { flex-shrink: 0; }
 
 /* Gap */
 .gap-0\.5 { gap: 0.125rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
 
 /* Padding */
+.p-2 { padding: 0.5rem; }
 .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
 
 /* Margin */
 .mt-0\.5 { margin-top: 0.125rem; }
+.mt-2 { margin-top: 0.5rem; }
 .mr-2 { margin-right: 0.5rem; }
 
 /* Width */

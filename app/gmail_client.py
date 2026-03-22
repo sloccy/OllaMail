@@ -21,9 +21,6 @@ CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "/credentials/credentials.json"
 REDIRECT_URI = "http://localhost"
 GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 
-_label_cache: dict = {}  # token -> (timestamp, labels)
-_LABEL_CACHE_TTL = 300  # 5 minutes
-
 _retry = Retry(
     total=3,
     backoff_factor=1,
@@ -80,14 +77,10 @@ def _gmail_request(method, path, creds, **kwargs):
     return resp.json() if resp.content else None
 
 
-def _invalidate_label_cache(creds):
-    _label_cache.pop(creds.token, None)
-
-
 def build_label_cache(creds, label_names: list) -> dict:
-    """Return {name: id} for the given label names, creating any that are missing."""
-    all_labels = list_labels(creds)
-    existing = {l["name"].lower(): l["id"] for l in all_labels}
+    """Fetch the Gmail label list once, create any missing labels, return {name: id}."""
+    result = _gmail_request("GET", "labels", creds)
+    existing = {l["name"].lower(): l["id"] for l in result.get("labels", [])}
     cache = {}
     for name in label_names:
         if name.lower() in existing:
@@ -99,7 +92,6 @@ def build_label_cache(creds, label_names: list) -> dict:
                 "messageListVisibility": "show",
             })
             cache[name] = created["id"]
-            _invalidate_label_cache(creds)  # bust cache after new label created
     return cache
 
 
@@ -150,19 +142,11 @@ def trash_email(creds, message_id: str):
 
 
 def list_labels(creds) -> list:
-    cache_key = creds.token
-    cached = _label_cache.get(cache_key)
-    if cached:
-        ts, labels = cached
-        if time.time() - ts < _LABEL_CACHE_TTL:
-            return labels
     result = _gmail_request("GET", "labels", creds)
-    labels = sorted(
+    return sorted(
         [{"id": l["id"], "name": l["name"]} for l in result.get("labels", [])],
         key=lambda x: x["name"].lower(),
     )
-    _label_cache[cache_key] = (time.time(), labels)
-    return labels
 
 
 def fetch_emails_older_than(creds, days: int, label_name: str = None, excluded_labels: list = None) -> list:
