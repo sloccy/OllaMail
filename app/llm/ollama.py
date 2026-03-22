@@ -6,7 +6,8 @@ from app import db
 _session = requests.Session()
 from app.llm.base import LLMProvider
 from app.config import (OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_TIMEOUT,
-                        OLLAMA_NUM_CTX, OLLAMA_NUM_PREDICT, OLLAMA_GENERATE_NUM_PREDICT)
+                        OLLAMA_NUM_CTX, OLLAMA_NUM_PREDICT, OLLAMA_GENERATE_NUM_PREDICT,
+                        DEBUG_LOGGING)
 
 
 class OllamaProvider(LLMProvider):
@@ -93,8 +94,9 @@ No explanation, no markdown, just the JSON object."""
                     idx = int(k) - 1
                     if 0 <= idx < len(prompts):
                         parsed[prompts[idx]["id"]] = bool(v)
-                db.add_log("DEBUG", f"LLM raw response: {raw}")
-                db.add_log("DEBUG", f"LLM parsed: { {p['name']: parsed.get(p['id'], False) for p in prompts} }")
+                if DEBUG_LOGGING:
+                    db.add_log("DEBUG", f"LLM raw response: {raw}")
+                    db.add_log("DEBUG", f"LLM parsed: { {p['name']: parsed.get(p['id'], False) for p in prompts} }")
                 return parsed
             except Exception as e:
                 db.add_log("ERROR", f"LLM parse error: {e!r} | raw: {raw!r}")

@@ -1,4 +1,5 @@
 from app import db, gmail_client
+from app.db import get_db
 from app.llm.base import LLMProvider
 from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS
 
@@ -42,6 +43,10 @@ def _process_email(email: dict, account_id: int, email_addr: str,
         email_results = provider.classify_email_batch(email, prompts)
         stop = False
 
+        # Collect Gmail API calls and DB writes; apply all DB writes in one transaction.
+        pending_logs = []
+        pending_cats = []
+
         for prompt in prompts:
             if stop:
                 break
@@ -76,28 +81,40 @@ def _process_email(email: dict, account_id: int, email_addr: str,
                     actions_taken.append("stopped further rules")
                     stop = True
 
-                db.add_log(
+                pending_logs.append((
                     "INFO",
                     f"[{email_addr}] '{email['subject'][:60]}' — {', '.join(actions_taken)} (rule: {prompt['name']})",
-                )
-                db.add_categorization(
-                    account_id=account_id,
-                    account_email=email_addr,
-                    message_id=email["id"],
-                    subject=email.get("subject", ""),
-                    sender=email.get("sender", ""),
-                    prompt_id=prompt["id"],
-                    prompt_name=prompt["name"],
-                    label_name=prompt["label_name"],
-                    actions=", ".join(actions_taken),
-                )
-            else:
-                db.add_log(
-                    "DEBUG",
-                    f"[{email_addr}] Skipped '{email['subject'][:60]}' for rule: {prompt['name']}",
-                )
+                ))
+                pending_cats.append({
+                    "account_id": account_id,
+                    "account_email": email_addr,
+                    "message_id": email["id"],
+                    "subject": email.get("subject", ""),
+                    "sender": email.get("sender", ""),
+                    "prompt_id": prompt["id"],
+                    "prompt_name": prompt["name"],
+                    "label_name": prompt["label_name"],
+                    "actions": ", ".join(actions_taken),
+                })
 
-        db.mark_processed(account_id, email["id"])
+        with get_db() as conn:
+            for level, message in pending_logs:
+                conn.execute(
+                    "INSERT INTO logs (level, message) VALUES (?, ?)", (level, message)
+                )
+            for c in pending_cats:
+                conn.execute(
+                    """INSERT INTO categorization_history
+                       (account_id, account_email, message_id, subject, sender,
+                        prompt_id, prompt_name, label_name, actions)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (c["account_id"], c["account_email"], c["message_id"], c["subject"],
+                     c["sender"], c["prompt_id"], c["prompt_name"], c["label_name"], c["actions"]),
+                )
+            conn.execute(
+                "INSERT OR IGNORE INTO processed_emails (account_id, message_id) VALUES (?, ?)",
+                (account_id, email["id"]),
+            )
     except Exception as e:
         db.add_log("ERROR", f"[{email_addr}] Error processing email '{email.get('subject', '?')[:60]}': {e}")
         db.mark_processed(account_id, email["id"])  # prevent infinite retry on persistent failures

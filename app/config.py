@@ -14,3 +14,4 @@ LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "30"))
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "300"))
 MIN_POLL_INTERVAL = int(os.getenv("MIN_POLL_INTERVAL", "30"))
 HISTORY_MAX_LIMIT = int(os.getenv("HISTORY_MAX_LIMIT", "500"))
+DEBUG_LOGGING = os.getenv("DEBUG_LOGGING", "0") == "1"

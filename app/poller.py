@@ -4,7 +4,7 @@ from app import db
 from app.llm import get_provider
 from app.services.email_processor import process_account
 from app.services.retention import cleanup_retention
-from app.config import POLL_INTERVAL
+from app.config import POLL_INTERVAL, GMAIL_LOOKBACK_HOURS
 
 _stop_event = threading.Event()
 _scan_lock = threading.Lock()
@@ -63,6 +63,7 @@ def _scan_all_accounts():
 def _run_scan():
     _set_status(last_run=time.time())
     db.trim_logs()
+    db.trim_processed_emails(GMAIL_LOOKBACK_HOURS)
     accounts = [a for a in db.list_accounts() if a["active"]]
 
     if not accounts:
