@@ -112,7 +112,7 @@ def _ensure_label_for_accounts(account_id, label_name):
                 continue
             try:
                 creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-                if refreshed_creds != account["credentials_json"]:
+                if refreshed_creds and refreshed_creds != account["credentials_json"]:
                     db.update_account_credentials(account["id"], refreshed_creds)
                 gmail_client.build_label_cache(creds, [label_name])
             except Exception as e:
@@ -552,7 +552,7 @@ def frag_retention(account_id):
     retention = db.get_retention(account_id)
     try:
         creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-        if refreshed_creds != account["credentials_json"]:
+        if refreshed_creds and refreshed_creds != account["credentials_json"]:
             db.update_account_credentials(account_id, refreshed_creds)
         gmail_labels = gmail_client.list_labels(creds)
     except Exception:
@@ -779,7 +779,7 @@ def frag_retention_query():
     retention = db.get_retention(account_id)
     try:
         creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-        if refreshed_creds != account["credentials_json"]:
+        if refreshed_creds and refreshed_creds != account["credentials_json"]:
             db.update_account_credentials(account_id, refreshed_creds)
         gmail_labels = gmail_client.list_labels(creds)
     except Exception:
