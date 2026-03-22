@@ -146,7 +146,7 @@ def _migrate():
         "ALTER TABLE prompts ADD COLUMN sort_order INTEGER DEFAULT 0",
         "ALTER TABLE prompts ADD COLUMN stop_processing INTEGER DEFAULT 0",
         "ALTER TABLE prompts ADD COLUMN account_id INTEGER DEFAULT NULL",
-        "ALTER TABLE processed_emails ADD COLUMN processed_at TEXT DEFAULT (datetime('now'))",
+        "ALTER TABLE processed_emails ADD COLUMN processed_at TEXT",
         "CREATE TABLE IF NOT EXISTS account_retention (account_id INTEGER PRIMARY KEY, global_days INTEGER)",
         "CREATE TABLE IF NOT EXISTS label_retention (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER NOT NULL, label_name TEXT NOT NULL, days INTEGER NOT NULL, UNIQUE(account_id, label_name))",
         "CREATE TABLE IF NOT EXISTS label_exemptions (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER NOT NULL, label_name TEXT NOT NULL, UNIQUE(account_id, label_name))",
@@ -346,7 +346,7 @@ def trim_processed_emails(lookback_hours):
     """Delete processed_emails entries older than 2x the lookback window."""
     with get_db() as conn:
         conn.execute(
-            "DELETE FROM processed_emails WHERE processed_at < datetime('now', ?)",
+            "DELETE FROM processed_emails WHERE processed_at IS NOT NULL AND processed_at < datetime('now', ?)",
             (f"-{lookback_hours * 2} hours",),
         )
 
