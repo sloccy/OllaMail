@@ -1,45 +1,45 @@
-<div class="card u-mb-3" id="prompt-card-{{ p.id }}" data-id="{{ p.id }}"
+<div class="card mb-3" id="prompt-card-{{ p.id }}" data-id="{{ p.id }}"
      ondragover="onDragOver(event)"
      ondragleave="onDragLeave(event)"
      ondrop="onDrop(event)">
-  <div class="card-content">
-    <div class="u-flex u-items-start u-justify-between u-gap-3">
+  <div class="card-body">
+    <div class="d-flex align-items-start justify-content-between gap-3">
       <div class="drag-handle" title="Drag to reorder" draggable="true"
            ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
            ondragover="onDragOver(event)" ondrop="onDrop(event)">&#9776;</div>
-      <div class="u-flex-grow">
-        <div class="font-semibold u-mb-1">{{ p.name|e }}</div>
-        <div class="font-mono text-sm u-text-muted u-mb-2">Created {{ p.created_at|fmtdate }}</div>
-        <div class="u-mb-2">
-          <span class="tag is-primary border u-border-primary-subtle font-mono">&#9654; {{ p.label_name|e }}</span>
+      <div class="flex-grow-1">
+        <div class="fw-semibold mb-1">{{ p.name|e }}</div>
+        <div class="font-monospace small text-muted mb-2">Created {{ p.created_at|fmtdate }}</div>
+        <div class="mb-2">
+          <span class="badge border border-primary text-primary font-monospace">&#9654; {{ p.label_name|e }}</span>
           {% if p.active %}
-            <span class="tag is-success u-ml-1">&#9679; active</span>
+            <span class="badge text-bg-success ms-1">&#9679; active</span>
           {% else %}
-            <span class="tag is-info u-ml-1">paused</span>
+            <span class="badge text-bg-info ms-1">paused</span>
           {% endif %}
           {% if p.account_id %}
-            <span class="tag is-primary is-outlined u-ml-1">{{ account_map.get(p.account_id, 'account ' ~ p.account_id)|e }}</span>
+            <span class="badge border border-primary text-primary ms-1">{{ account_map.get(p.account_id, 'account ' ~ p.account_id)|e }}</span>
           {% else %}
-            <span class="tag is-info is-outlined u-ml-1">global</span>
+            <span class="badge border border-info text-info ms-1">global</span>
           {% endif %}
-          {% if p.action_archive %}<span class="tag is-light is-outlined u-ml-1">archive</span>{% endif %}
-          {% if p.action_spam %}<span class="tag is-danger u-ml-1">spam</span>{% endif %}
-          {% if p.action_trash %}<span class="tag is-light is-outlined u-ml-1">&#128465; trash</span>{% endif %}
-          {% if p.action_mark_read %}<span class="tag is-light is-outlined u-ml-1">mark read</span>{% endif %}
-          {% if p.stop_processing %}<span class="tag is-danger u-ml-1">&#9940; stop</span>{% endif %}
+          {% if p.action_archive %}<span class="badge border text-secondary ms-1">archive</span>{% endif %}
+          {% if p.action_spam %}<span class="badge text-bg-danger ms-1">spam</span>{% endif %}
+          {% if p.action_trash %}<span class="badge border text-secondary ms-1">&#128465; trash</span>{% endif %}
+          {% if p.action_mark_read %}<span class="badge border text-secondary ms-1">mark read</span>{% endif %}
+          {% if p.stop_processing %}<span class="badge text-bg-danger ms-1">&#9940; stop</span>{% endif %}
         </div>
-        <div class="text-sm u-text-muted u-leading-relaxed border-t u-border-subtle u-mt-2 u-pt-2">{{ p.instructions|e }}</div>
+        <div class="small text-muted border-top pt-2 mt-2" style="line-height:1.625">{{ p.instructions|e }}</div>
       </div>
-      <div class="u-flex u-gap-2 u-flex-shrink-0 u-self-start">
-        <button class="button is-outlined is-info is-small"
+      <div class="d-flex gap-2 flex-shrink-0 align-self-start">
+        <button class="btn btn-outline-secondary btn-sm"
           hx-post="/fragments/prompts/{{ p.id }}/toggle"
           hx-target="#prompt-card-{{ p.id }}"
           hx-swap="outerHTML">{{ 'Pause' if p.active else 'Resume' }}</button>
-        <button class="button is-outlined is-info is-small"
+        <button class="btn btn-outline-secondary btn-sm"
           hx-get="/fragments/prompts/{{ p.id }}/edit"
           hx-target="#prompt-card-{{ p.id }}"
           hx-swap="outerHTML">Edit</button>
-        <button class="button is-outlined is-danger is-small"
+        <button class="btn btn-outline-danger btn-sm"
           hx-delete="/fragments/prompts/{{ p.id }}"
           hx-target="#prompts-list"
           hx-swap="innerHTML"

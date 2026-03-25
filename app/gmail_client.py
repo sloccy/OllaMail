@@ -1,16 +1,14 @@
 import os
 import json
 import base64
-import time
-import requests
-from concurrent.futures import ThreadPoolExecutor
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 import datetime
+from cachetools import TTLCache
+from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
 from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS, EMAIL_BODY_TRUNCATION
+import time
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
@@ -19,20 +17,8 @@ SCOPES = [
 ]
 CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "/credentials/credentials.json")
 REDIRECT_URI = "http://localhost"
-GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 
-_label_cache: dict = {}  # refresh_token -> (timestamp, labels)
-_LABEL_CACHE_TTL = 300  # 5 minutes
-
-_retry = Retry(
-    total=3,
-    backoff_factor=1,
-    status_forcelist=[429, 500, 502, 503, 504],
-    allowed_methods=None,
-    raise_on_status=False,
-)
-_session = requests.Session()
-_session.mount("https://", HTTPAdapter(max_retries=_retry))
+_label_cache: TTLCache = TTLCache(maxsize=32, ttl=300)
 
 
 def get_auth_url(state: str) -> str:
@@ -56,105 +42,102 @@ def exchange_code(state: str, code: str) -> tuple[str, str]:
 
 
 def _get_email(creds: Credentials) -> str:
-    resp = _session.get(
-        "https://www.googleapis.com/oauth2/v2/userinfo",
-        headers={"Authorization": f"Bearer {creds.token}"},
-    )
-    resp.raise_for_status()
-    return resp.json()["email"]
+    svc = build("oauth2", "v2", credentials=creds, cache_discovery=False)
+    return svc.userinfo().get().execute()["email"]
 
 
 def get_service(credentials_json: str):
-    """Load and refresh credentials. Returns (creds, refreshed_json_or_None).
-    refreshed_json is None when no refresh was needed."""
+    """Load and refresh credentials. Returns (service, refreshed_json_or_None)."""
     creds = Credentials.from_authorized_user_info(json.loads(credentials_json), SCOPES)
+    refreshed = None
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        return creds, creds.to_json()
-    return creds, None
+        refreshed = creds.to_json()
+    service = build("gmail", "v1", credentials=creds, cache_discovery=False)
+    return service, refreshed
 
 
-def _gmail_request(method, path, creds, **kwargs):
-    """Make an authenticated Gmail API request."""
-    headers = {"Authorization": f"Bearer {creds.token}"}
-    resp = _session.request(method, f"{GMAIL_API}/{path}", headers=headers, **kwargs)
-    resp.raise_for_status()
-    return resp.json() if resp.content else None
+def _cache_key(service) -> str:
+    return service._http.credentials.refresh_token
 
 
-def _invalidate_label_cache(creds):
-    _label_cache.pop(creds.refresh_token, None)
-
-
-def build_label_cache(creds, label_names: list) -> dict:
+def build_label_cache(service, label_names: list) -> dict:
     """Return {name: id} for the given label names, creating any that are missing."""
-    all_labels = list_labels(creds)
+    all_labels = list_labels(service)
     existing = {l["name"].lower(): l["id"] for l in all_labels}
     cache = {}
     for name in label_names:
         if name.lower() in existing:
             cache[name] = existing[name.lower()]
         else:
-            created = _gmail_request("POST", "labels", creds, json={
-                "name": name,
-                "labelListVisibility": "labelShow",
-                "messageListVisibility": "show",
-            })
+            created = service.users().labels().create(
+                userId="me",
+                body={"name": name, "labelListVisibility": "labelShow", "messageListVisibility": "show"},
+            ).execute()
             cache[name] = created["id"]
-            _invalidate_label_cache(creds)  # bust cache after new label created
+            _label_cache.pop(_cache_key(service), None)
     return cache
 
 
-def list_recent_message_ids(creds, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS) -> list:
-    """Return message IDs of recent inbox emails (lightweight, no full content)."""
+def list_recent_message_ids(service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS) -> list:
     after_ts = int(time.time() - lookback_hours * 3600)
-    response = _gmail_request("GET", "messages", creds, params={
-        "maxResults": max_results,
-        "q": f"in:inbox after:{after_ts}",
-    })
+    response = service.users().messages().list(
+        userId="me",
+        maxResults=max_results,
+        q=f"in:inbox after:{after_ts}",
+    ).execute()
     return [m["id"] for m in response.get("messages", [])]
 
 
-def fetch_message_details(creds, message_ids: list) -> list:
-    """Fetch full content for the given message IDs in parallel."""
+def fetch_message_details(service, message_ids: list) -> list:
     if not message_ids:
         return []
+    results = {}
 
-    def fetch_one(msg_id):
-        full = _gmail_request("GET", f"messages/{msg_id}", creds, params={"format": "full"})
+    def _callback(request_id, response, exception):
+        if exception is None:
+            results[request_id] = response
+
+    for i in range(0, len(message_ids), 100):
+        batch = service.new_batch_http_request(callback=_callback)
+        for msg_id in message_ids[i:i + 100]:
+            batch.add(
+                service.users().messages().get(userId="me", id=msg_id, format="full"),
+                request_id=msg_id,
+            )
+        batch.execute()
+
+    emails = []
+    for msg_id in message_ids:
+        full = results.get(msg_id)
+        if not full:
+            continue
         headers = {h["name"]: h["value"] for h in full["payload"]["headers"]}
         body = _extract_body(full["payload"])
-        return {
+        emails.append({
             "id": msg_id,
             "subject": headers.get("Subject", "(no subject)"),
             "sender": headers.get("From", "unknown"),
             "snippet": full.get("snippet", ""),
             "body": body[:EMAIL_BODY_TRUNCATION],
-        }
-
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        return list(executor.map(fetch_one, message_ids))
+        })
+    return emails
 
 
-
-def list_labels(creds) -> list:
-    cache_key = creds.refresh_token
-    cached = _label_cache.get(cache_key)
-    if cached:
-        ts, labels = cached
-        if time.time() - ts < _LABEL_CACHE_TTL:
-            return labels
-    result = _gmail_request("GET", "labels", creds)
+def list_labels(service) -> list:
+    key = _cache_key(service)
+    if key in _label_cache:
+        return _label_cache[key]
+    result = service.users().labels().list(userId="me").execute()
     labels = sorted(
         [{"id": l["id"], "name": l["name"]} for l in result.get("labels", [])],
         key=lambda x: x["name"].lower(),
     )
-    _label_cache[cache_key] = (time.time(), labels)
+    _label_cache[key] = labels
     return labels
 
 
-def fetch_emails_older_than(creds, days: int, label_name: str = None, excluded_labels: list = None) -> list:
-    """Return message IDs older than `days` days, optionally filtered by label."""
+def fetch_emails_older_than(service, days: int, label_name: str = None, excluded_labels: list = None) -> list:
     cutoff = datetime.date.today() - datetime.timedelta(days=days)
     query = f"before:{cutoff.strftime('%Y/%m/%d')}"
     if label_name:
@@ -163,24 +146,16 @@ def fetch_emails_older_than(creds, days: int, label_name: str = None, excluded_l
         for lbl in excluded_labels:
             query += f" -label:{lbl}"
     ids = []
-    page_token = None
-    while True:
-        params = {"q": query, "maxResults": 500}
-        if page_token:
-            params["pageToken"] = page_token
-        resp = _gmail_request("GET", "messages", creds, params=params)
-        ids.extend(m["id"] for m in resp.get("messages", []))
-        page_token = resp.get("nextPageToken")
-        if not page_token:
-            break
+    request = service.users().messages().list(userId="me", q=query, maxResults=500)
+    while request is not None:
+        response = request.execute()
+        ids.extend(m["id"] for m in response.get("messages", []))
+        request = service.users().messages().list_next(request, response)
     return ids
 
 
-def batch_modify_emails(creds, modifications: list) -> None:
-    """Apply label modifications to multiple messages using batchModify.
-    modifications: list of (message_id, add_labels, remove_labels) tuples.
-    Groups by identical add/remove combos and sends one batchModify per group.
-    """
+def batch_modify_emails(service, modifications: list) -> None:
+    """Apply label modifications using batchModify. Groups by identical add/remove combos."""
     if not modifications:
         return
     groups: dict = {}
@@ -194,14 +169,13 @@ def batch_modify_emails(creds, modifications: list) -> None:
                 body["addLabelIds"] = list(add_labels)
             if remove_labels:
                 body["removeLabelIds"] = list(remove_labels)
-            _gmail_request("POST", "messages/batchModify", creds, json=body)
+            service.users().messages().batchModify(userId="me", body=body).execute()
 
 
-def batch_trash_emails(creds, message_ids: list) -> int:
-    """Trash emails in bulk using Gmail's batchModify endpoint (up to 1000 per request)."""
+def batch_trash_emails(service, message_ids: list) -> int:
     if not message_ids:
         return 0
-    batch_modify_emails(creds, [(mid, ["TRASH"], ["INBOX"]) for mid in message_ids])
+    batch_modify_emails(service, [(mid, ["TRASH"], ["INBOX"]) for mid in message_ids])
     return len(message_ids)
 
 

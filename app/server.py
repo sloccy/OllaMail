@@ -1,84 +1,32 @@
 import csv
-import gzip
-import hashlib
 import html as _html
 import io
 import json
 import os
-import re
 import secrets
 import threading
 import time as _time
 from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs
 from flask import Flask, jsonify, request, render_template, session, Response, make_response
-from app import db, gmail_client, poller, llm_client
+from flask_compress import Compress
+from app import db, gmail_client, poller
+from app.llm import get_provider as _get_llm_provider
+_llm = _get_llm_provider()
 from app.config import (POLL_INTERVAL, OLLAMA_MODEL, OLLAMA_HOST, OLLAMA_TIMEOUT,
                         OLLAMA_NUM_CTX, OLLAMA_NUM_PREDICT, GMAIL_MAX_RESULTS,
                         GMAIL_LOOKBACK_HOURS, MIN_POLL_INTERVAL, HISTORY_MAX_LIMIT)
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = "placeholder-replaced-at-startup"
+Compress(app)
 
 _ASSET_VERSION = str(int(_time.time()))
-_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-_static_cache: dict[str, tuple[bytes, bytes | None, str, str]] = {}
-
-_CONTENT_TYPES = {
-    ".css": "text/css; charset=utf-8",
-    ".js": "application/javascript; charset=utf-8",
-    ".png": "image/png",
-    ".webp": "image/webp",
-    ".ico": "image/x-icon",
-    ".svg": "image/svg+xml",
-}
-
-
-def _minify_css(text: str) -> str:
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"\s*([{}:;,>~+])\s*", r"\1", text)
-    text = re.sub(r";}", "}", text)
-    return text.strip()
-
-
-def _load_static(filename: str) -> tuple[bytes, bytes | None, str, str]:
-    filepath = os.path.join(_STATIC_DIR, filename)
-    with open(filepath, "rb") as f:
-        raw = f.read()
-    ext = os.path.splitext(filename)[1].lower()
-    if ext == ".css" and not filename.endswith(".min.css"):
-        raw = _minify_css(raw.decode("utf-8")).encode("utf-8")
-    gz = gzip.compress(raw) if len(raw) >= 500 else None
-    etag = hashlib.md5(raw).hexdigest()[:12]
-    ct = _CONTENT_TYPES.get(ext, "application/octet-stream")
-    return raw, gz, etag, ct
 
 
 @app.context_processor
 def _inject_asset_version():
     return {"asset_v": _ASSET_VERSION}
-
-
-@app.route("/static/<path:filename>")
-def serve_static(filename):
-    if filename not in _static_cache:
-        try:
-            _static_cache[filename] = _load_static(filename)
-        except (FileNotFoundError, IsADirectoryError):
-            from flask import abort
-            abort(404)
-    raw, gz, etag, ct = _static_cache[filename]
-    versioned = "v=" in request.query_string.decode()
-    cc = "public, max-age=31536000, immutable" if versioned else "public, max-age=86400"
-    if request.headers.get("If-None-Match") == etag:
-        return Response(status=304, headers={"ETag": etag, "Cache-Control": cc})
-    use_gz = gz is not None and "gzip" in request.headers.get("Accept-Encoding", "")
-    headers = {"Content-Type": ct, "Cache-Control": cc, "ETag": etag, "Vary": "Accept-Encoding"}
-    if use_gz:
-        headers["Content-Encoding"] = "gzip"
-        return Response(gz, headers=headers)
-    return Response(raw, headers=headers)
 
 
 # ---- Fragment helpers ----
@@ -116,26 +64,6 @@ app.jinja_env.filters["fmtinterval"] = _fmt_interval
 app.jinja_env.filters["fmtretention"] = _fmt_retention
 
 
-@app.after_request
-def compress_response(response):
-    if "gzip" not in request.headers.get("Accept-Encoding", ""):
-        return response
-    if response.status_code < 200 or response.status_code >= 300:
-        return response
-    if "Content-Encoding" in response.headers:
-        return response
-    if response.direct_passthrough:
-        return response
-    data = response.get_data()
-    if len(data) < 500:
-        return response
-    compressed = gzip.compress(data)
-    response.set_data(compressed)
-    response.headers["Content-Encoding"] = "gzip"
-    response.headers["Content-Length"] = len(compressed)
-    response.headers["Vary"] = "Accept-Encoding"
-    return response
-
 
 def fragment_response(template, ctx, toast=None):
     resp = make_response(render_template(template, **ctx))
@@ -167,10 +95,10 @@ def _ensure_label_for_accounts(account_id, label_name):
             if not account:
                 continue
             try:
-                creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+                service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
                 if refreshed_creds and refreshed_creds != account["credentials_json"]:
                     db.update_account_credentials(account["id"], refreshed_creds)
-                gmail_client.build_label_cache(creds, [label_name])
+                gmail_client.build_label_cache(service, [label_name])
             except Exception as e:
                 db.add_log("WARNING", f"Could not pre-create label '{label_name}' for account {account.get('id')}: {e}")
     threading.Thread(target=_do, daemon=True).start()
@@ -557,6 +485,7 @@ def frag_update_settings():
                       "type": "error"})
         db.set_setting("poll_interval", str(val))
         db.add_log("INFO", f"Settings updated: poll_interval={val}s")
+        poller.update_interval(val)
     return fragment_response("fragments/settings_form.html", {
         "poll_interval": int(db.get_setting("poll_interval", str(POLL_INTERVAL))),
         "ollama_model": OLLAMA_MODEL,
@@ -600,22 +529,36 @@ def frag_history_filters():
                              {"accounts": accounts, "prompts": prompts})
 
 
+def _retention_panel(account_id, account=None, toast=None):
+    """Return retention panel fragment with Gmail labels fetched from the account."""
+    if account is None:
+        account = db.get_account(account_id)
+    retention = db.get_retention(account_id)
+    try:
+        service, _ = gmail_client.get_service(account["credentials_json"])
+        gmail_labels = gmail_client.list_labels(service)
+    except Exception:
+        gmail_labels = []
+    return fragment_response("fragments/retention_panel.html",
+                             {"retention": retention, "account_id": account_id,
+                              "gmail_labels": gmail_labels},
+                             toast=toast)
+
+
 @app.route("/fragments/retention/<int:account_id>")
 def frag_retention(account_id):
     account = db.get_account(account_id)
     if not account:
         return "", 404
-    retention = db.get_retention(account_id)
+    # Refresh credentials if needed
     try:
-        creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
-        if refreshed_creds and refreshed_creds != account["credentials_json"]:
-            db.update_account_credentials(account_id, refreshed_creds)
-        gmail_labels = gmail_client.list_labels(creds)
+        service, refreshed = gmail_client.get_service(account["credentials_json"])
+        if refreshed and refreshed != account["credentials_json"]:
+            db.update_account_credentials(account_id, refreshed)
+            account["credentials_json"] = refreshed
     except Exception:
-        gmail_labels = []
-    return fragment_response("fragments/retention_panel.html",
-                             {"retention": retention, "account_id": account_id,
-                              "gmail_labels": gmail_labels})
+        pass
+    return _retention_panel(account_id, account)
 
 
 @app.route("/fragments/retention/<int:account_id>", methods=["POST"])
@@ -627,27 +570,15 @@ def frag_set_retention(account_id):
     enabled = bool(f.get("enabled"))
     if enabled:
         value = int(f.get("value", 1))
-        unit = f.get("unit", "days")
-        days = value * 365 if unit == "years" else value
+        days = value * 365 if f.get("unit") == "years" else value
         if days < 1:
-            return fragment_response("fragments/retention_panel.html",
-                                     {"retention": db.get_retention(account_id),
-                                      "account_id": account_id, "gmail_labels": []},
-                                     toast={"message": "Days must be at least 1.", "type": "error"})
+            return _retention_panel(account_id, account,
+                                    toast={"message": "Days must be at least 1.", "type": "error"})
         db.set_global_retention(account_id, days)
     else:
         db.clear_global_retention(account_id)
-    retention = db.get_retention(account_id)
-    try:
-        creds, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(creds)
-    except Exception:
-        gmail_labels = []
     msg = "Global retention saved." if enabled else "Global retention disabled."
-    return fragment_response("fragments/retention_panel.html",
-                             {"retention": retention, "account_id": account_id,
-                              "gmail_labels": gmail_labels},
-                             toast=msg)
+    return _retention_panel(account_id, account, toast=msg)
 
 
 @app.route("/fragments/retention/<int:account_id>/labels", methods=["POST"])
@@ -658,41 +589,19 @@ def frag_add_label_retention(account_id):
     f = request.form
     label_name = (f.get("label_name") or "").strip()
     value = f.get("value", "")
-    unit = f.get("unit", "days")
     if not label_name or not value:
-        return fragment_response("fragments/retention_panel.html",
-                                 {"retention": db.get_retention(account_id),
-                                  "account_id": account_id, "gmail_labels": []},
-                                 toast={"message": "Label and days are required.", "type": "error"})
-    days = int(value) * 365 if unit == "years" else int(value)
+        return _retention_panel(account_id, account,
+                                toast={"message": "Label and days are required.", "type": "error"})
+    days = int(value) * 365 if f.get("unit") == "years" else int(value)
     if days >= 1:
         db.add_label_retention(account_id, label_name, days)
-    retention = db.get_retention(account_id)
-    try:
-        creds, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(creds)
-    except Exception:
-        gmail_labels = []
-    return fragment_response("fragments/retention_panel.html",
-                             {"retention": retention, "account_id": account_id,
-                              "gmail_labels": gmail_labels},
-                             toast="Label rule added.")
+    return _retention_panel(account_id, account, toast="Label rule added.")
 
 
 @app.route("/fragments/retention/<int:account_id>/labels/<int:rule_id>", methods=["DELETE"])
 def frag_delete_label_retention(account_id, rule_id):
     db.delete_label_retention(rule_id)
-    retention = db.get_retention(account_id)
-    account = db.get_account(account_id)
-    try:
-        creds, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(creds)
-    except Exception:
-        gmail_labels = []
-    return fragment_response("fragments/retention_panel.html",
-                             {"retention": retention, "account_id": account_id,
-                              "gmail_labels": gmail_labels},
-                             toast="Rule removed.")
+    return _retention_panel(account_id, toast="Rule removed.")
 
 
 @app.route("/fragments/retention/<int:account_id>/exemptions", methods=["POST"])
@@ -703,32 +612,13 @@ def frag_add_exemption(account_id):
     label_name = (request.form.get("label_name") or "").strip()
     if label_name:
         db.add_label_exemption(account_id, label_name)
-    retention = db.get_retention(account_id)
-    try:
-        creds, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(creds)
-    except Exception:
-        gmail_labels = []
-    return fragment_response("fragments/retention_panel.html",
-                             {"retention": retention, "account_id": account_id,
-                              "gmail_labels": gmail_labels},
-                             toast=f'"{label_name}" will never be deleted.')
+    return _retention_panel(account_id, account, toast=f'"{label_name}" will never be deleted.')
 
 
 @app.route("/fragments/retention/<int:account_id>/exemptions/<int:exemption_id>", methods=["DELETE"])
 def frag_delete_exemption(account_id, exemption_id):
     db.delete_label_exemption(exemption_id)
-    retention = db.get_retention(account_id)
-    account = db.get_account(account_id)
-    try:
-        creds, _ = gmail_client.get_service(account["credentials_json"])
-        gmail_labels = gmail_client.list_labels(creds)
-    except Exception:
-        gmail_labels = []
-    return fragment_response("fragments/retention_panel.html",
-                             {"retention": retention, "account_id": account_id,
-                              "gmail_labels": gmail_labels},
-                             toast="Exemption removed.")
+    return _retention_panel(account_id, toast="Exemption removed.")
 
 
 @app.route("/fragments/oauth/start", methods=["POST"])
@@ -834,10 +724,10 @@ def frag_retention_query():
         return Response("", content_type="text/html")
     retention = db.get_retention(account_id)
     try:
-        creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+        service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
         if refreshed_creds and refreshed_creds != account["credentials_json"]:
             db.update_account_credentials(account_id, refreshed_creds)
-        gmail_labels = gmail_client.list_labels(creds)
+        gmail_labels = gmail_client.list_labels(service)
     except Exception:
         gmail_labels = []
     return fragment_response("fragments/retention_panel.html",
@@ -854,7 +744,7 @@ def api_generate_prompt_stream():
             yield "event: done\ndata: \n\n"
             return
         try:
-            for event in llm_client.stream_generate_prompt_instruction(description):
+            for event in _llm.stream_generate_prompt_instruction(description):
                 event_type = event.get("type", "content")
                 text = event.get("text", "")
                 lines = ["event: " + event_type] + [f"data: {l}" for l in text.split("\n")] + ["", ""]
@@ -883,7 +773,7 @@ def create_app():
     db.init_db()
     app.secret_key = _get_or_create_secret_key()
     import threading
-    threading.Thread(target=llm_client.ensure_model_pulled, daemon=True).start()
+    threading.Thread(target=_llm.ensure_model_pulled, daemon=True).start()
     poller.start()
     return app
 
