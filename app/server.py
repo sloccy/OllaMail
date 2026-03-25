@@ -232,15 +232,16 @@ def api_export_config():
             }
         )
 
+    now = datetime.now(UTC)
     payload = {
         "version": 1,
-        "exported_at": datetime.now(UTC).isoformat(),
+        "exported_at": now.isoformat(),
         "accounts": accounts_export,
         "prompts": prompts_export,
         "settings": settings_export,
         "retention": retention_export,
     }
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = now.strftime("%Y-%m-%d")
     return Response(
         json.dumps(payload, indent=2),
         mimetype="application/json",
@@ -358,7 +359,6 @@ def api_download_logs():
 @app.route("/fragments/dashboard")
 def frag_dashboard():
     accounts = _safe_accounts()
-    prompts = db.list_prompts()
     poll_interval = int(db.get_setting("poll_interval", str(POLL_INTERVAL)))
     status = {**poller.get_status(), "current_time": _time.time()}
     logs = db.get_logs(15)
@@ -371,7 +371,7 @@ def frag_dashboard():
         "fragments/dashboard.html",
         {
             "accounts": accounts,
-            "active_prompts": sum(1 for p in prompts if p["active"]),
+            "active_prompts": db.count_active_prompts(),
             "poll_interval": _fmt_interval(poll_interval),
             "next_scan": next_scan,
             "poller_running": status.get("running", False),
@@ -559,13 +559,14 @@ def frag_history_filters():
 def _retention_panel(account_id, account=None, service=None, toast=None):
     if account is None:
         account = db.get_account(account_id)
-    retention = db.get_retention(account_id)
     if account is None:
+        retention = db.get_retention(account_id)
         return fragment_response(
             "fragments/retention_panel.html",
             {"retention": retention, "account_id": account_id, "gmail_labels": []},
             toast=toast,
         )
+    retention = db.get_retention(account_id)
     try:
         if service is None:
             service = gmail_client.get_service_and_refresh(account)
