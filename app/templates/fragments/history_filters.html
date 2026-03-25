@@ -1,47 +1,43 @@
-<div class="u-mb-0">
+<div class="mb-0">
   <label class="form-label">Account</label>
-  <div class="select is-small">
-    <select name="account_id" id="hist-filter-account"
-      hx-get="/fragments/history"
-      hx-target="#hist-body"
-      hx-swap="innerHTML"
-      hx-trigger="change"
-      hx-include="#hist-filter-form">
-      <option value="">All accounts</option>
-      {% for a in accounts %}
-      <option value="{{ a.id }}">{{ a.email|e }}</option>
-      {% endfor %}
-    </select>
-  </div>
+  <select name="account_id" id="hist-filter-account" class="form-select form-select-sm"
+    hx-get="/fragments/history"
+    hx-target="#hist-body"
+    hx-swap="innerHTML"
+    hx-trigger="change"
+    hx-include="#hist-filter-form">
+    <option value="">All accounts</option>
+    {% for a in accounts %}
+    <option value="{{ a.id }}">{{ a.email|e }}</option>
+    {% endfor %}
+  </select>
 </div>
-<div class="u-mb-0">
+<div class="mb-0">
   <label class="form-label">Rule</label>
-  <div class="select is-small">
-    <select name="prompt_id" id="hist-filter-rule"
-      hx-get="/fragments/history"
-      hx-target="#hist-body"
-      hx-swap="innerHTML"
-      hx-trigger="change"
-      hx-include="#hist-filter-form">
-      <option value="">All rules</option>
-      {% for p in prompts %}
-      <option value="{{ p.id }}">{{ p.name|e }}</option>
-      {% endfor %}
-    </select>
-  </div>
+  <select name="prompt_id" id="hist-filter-rule" class="form-select form-select-sm"
+    hx-get="/fragments/history"
+    hx-target="#hist-body"
+    hx-swap="innerHTML"
+    hx-trigger="change"
+    hx-include="#hist-filter-form">
+    <option value="">All rules</option>
+    {% for p in prompts %}
+    <option value="{{ p.id }}">{{ p.name|e }}</option>
+    {% endfor %}
+  </select>
 </div>
-<div class="u-mb-0">
+<div class="mb-0">
   <label class="form-label">Subject</label>
-  <input type="text" class="input is-small" name="subject" id="hist-filter-subject" placeholder="Search subject…"
+  <input type="text" class="form-control form-control-sm" name="subject" id="hist-filter-subject" placeholder="Search subject…"
     hx-get="/fragments/history"
     hx-target="#hist-body"
     hx-swap="innerHTML"
     hx-trigger="input delay:350ms"
     hx-include="#hist-filter-form">
 </div>
-<div class="u-mb-0">
+<div class="mb-0">
   <label class="form-label">Sender</label>
-  <input type="text" class="input is-small" name="sender" id="hist-filter-sender" placeholder="Search sender…"
+  <input type="text" class="form-control form-control-sm" name="sender" id="hist-filter-sender" placeholder="Search sender…"
     hx-get="/fragments/history"
     hx-target="#hist-body"
     hx-swap="innerHTML"

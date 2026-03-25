@@ -10,25 +10,25 @@ def process_account(account: dict, prompts: list, provider: LLMProvider):
     account_id = account["id"]
     email_addr = account["email"]
 
-    creds, refreshed_creds = gmail_client.get_service(account["credentials_json"])
+    service, refreshed_creds = gmail_client.get_service(account["credentials_json"])
     if refreshed_creds is not None:
         db.update_account_credentials(account_id, refreshed_creds)
 
     all_ids = gmail_client.list_recent_message_ids(
-        creds, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
+        service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
     )
     unprocessed_ids = db.filter_unprocessed(account_id, all_ids)
 
     if not unprocessed_ids:
         db.add_log("INFO", f"[{email_addr}] No new emails to process.")
         db.update_last_scan(account_id)
-        return creds
+        return service
 
-    new_emails = gmail_client.fetch_message_details(creds, unprocessed_ids)
+    new_emails = gmail_client.fetch_message_details(service, unprocessed_ids)
     db.add_log("INFO", f"[{email_addr}] Processing {len(new_emails)} new email(s) against {len(prompts)} rule(s).")
 
     unique_labels = list({p["label_name"] for p in prompts})
-    label_cache = gmail_client.build_label_cache(creds, unique_labels)
+    label_cache = gmail_client.build_label_cache(service, unique_labels)
 
     all_modifies = []
     all_trashes = []
@@ -39,12 +39,12 @@ def process_account(account: dict, prompts: list, provider: LLMProvider):
         all_trashes.extend(trashes)
 
     if all_trashes:
-        gmail_client.batch_trash_emails(creds, all_trashes)
+        gmail_client.batch_trash_emails(service, all_trashes)
     if all_modifies:
-        gmail_client.batch_modify_emails(creds, all_modifies)
+        gmail_client.batch_modify_emails(service, all_modifies)
 
     db.update_last_scan(account_id)
-    return creds
+    return service
 
 
 def _process_email(email: dict, account_id: int, email_addr: str,

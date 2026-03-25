@@ -1,37 +1,37 @@
 <form id="settings-form" hx-patch="/fragments/settings" hx-target="#settings-container" hx-swap="innerHTML">
   <div class="card">
-    <div class="card-content u-p-0">
-      <div class="u-flex u-items-center u-justify-between u-py-3 u-px-4 border-b setting-row">
-        <div><div class="font-medium">Poll interval</div><div class="text-sm u-text-muted u-mt-1">How often to scan for new emails (seconds). Minimum 30.</div></div>
-        <div class="u-flex-shrink-0 u-ml-4"><input type="number" class="input is-small" name="poll_interval" min="30" step="30" value="{{ poll_interval }}" style="width:100px;text-align:right;"></div>
+    <div class="card-body p-0">
+      <div class="d-flex align-items-center justify-content-between py-3 px-4 border-bottom setting-row">
+        <div><div class="fw-medium">Poll interval</div><div class="small text-muted mt-1">How often to scan for new emails (seconds). Minimum 30.</div></div>
+        <div class="flex-shrink-0 ms-4"><input type="number" class="form-control form-control-sm" name="poll_interval" min="30" step="30" value="{{ poll_interval }}" style="width:100px;text-align:right;"></div>
       </div>
-      <div class="u-flex u-items-center u-justify-between u-py-3 u-px-4 border-b setting-row">
-        <div><div class="font-medium">Ollama model</div><div class="text-sm u-text-muted u-mt-1">Set via OLLAMA_MODEL in docker-compose.yml</div></div>
-        <div class="u-flex-shrink-0 u-ml-4"><span class="tag is-primary border u-border-primary-subtle font-mono">{{ ollama_model }}</span></div>
+      <div class="d-flex align-items-center justify-content-between py-3 px-4 border-bottom setting-row">
+        <div><div class="fw-medium">Ollama model</div><div class="small text-muted mt-1">Set via OLLAMA_MODEL in docker-compose.yml</div></div>
+        <div class="flex-shrink-0 ms-4"><span class="badge border border-primary text-primary font-monospace">{{ ollama_model }}</span></div>
       </div>
-      <div class="u-flex u-items-center u-justify-between u-py-3 u-px-4 setting-row">
-        <div><div class="font-medium">Ollama host</div><div class="text-sm u-text-muted u-mt-1">Set via OLLAMA_HOST in docker-compose.yml</div></div>
-        <div class="u-flex-shrink-0 u-ml-4"><span class="tag is-primary border u-border-primary-subtle font-mono">{{ ollama_host }}</span></div>
+      <div class="d-flex align-items-center justify-content-between py-3 px-4 setting-row">
+        <div><div class="fw-medium">Ollama host</div><div class="small text-muted mt-1">Set via OLLAMA_HOST in docker-compose.yml</div></div>
+        <div class="flex-shrink-0 ms-4"><span class="badge border border-primary text-primary font-monospace">{{ ollama_host }}</span></div>
       </div>
     </div>
   </div>
-  <div class="u-my-3">
-    <button type="submit" class="button is-primary is-small">Save Changes</button>
+  <div class="my-3">
+    <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
   </div>
 </form>
 
-<div class="card u-mt-4">
-  <div class="card-content u-p-0">
-    <div class="u-py-3 u-px-4 border-b">
-      <div class="font-medium">Backup &amp; Restore</div>
-      <div class="text-sm u-text-muted u-mt-1">Export all accounts, prompts, settings, and retention rules to a JSON file. Import adds data without overwriting existing configuration. OAuth credentials are not exported — you will need to re-authenticate accounts after import.</div>
+<div class="card mt-4">
+  <div class="card-body p-0">
+    <div class="py-3 px-4 border-bottom">
+      <div class="fw-medium">Backup &amp; Restore</div>
+      <div class="small text-muted mt-1">Export all accounts, prompts, settings, and retention rules to a JSON file. Import adds data without overwriting existing configuration. OAuth credentials are not exported — you will need to re-authenticate accounts after import.</div>
     </div>
-    <div class="u-flex u-gap-2 u-py-3 u-px-4">
-      <button type="button" class="button is-small" onclick="window.location.href='/api/config/export'">Export Configuration</button>
-      <button type="button" class="button is-small" onclick="document.getElementById('config-import-input').click()">Import Configuration</button>
+    <div class="d-flex gap-2 py-3 px-4">
+      <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.href='/api/config/export'">Export Configuration</button>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('config-import-input').click()">Import Configuration</button>
       <input type="file" id="config-import-input" accept=".json" style="display:none" onchange="handleConfigImport(this)">
     </div>
-    <div id="import-result" class="u-px-4 u-pb-3" style="display:none"></div>
+    <div id="import-result" class="px-4 pb-3" style="display:none"></div>
   </div>
 </div>
 
@@ -48,11 +48,11 @@ function handleConfigImport(input) {
       const el = document.getElementById('import-result');
       el.style.display = '';
       if (data.error) {
-        el.innerHTML = '<div class="text-sm u-text-danger">' + data.error + '</div>';
+        el.innerHTML = '<div class="small text-danger">' + data.error + '</div>';
         return;
       }
       const s = data.summary;
-      el.innerHTML = '<div class="text-sm u-text-muted">Import complete — ' +
+      el.innerHTML = '<div class="small text-muted">Import complete — ' +
         'accounts: +' + s.accounts.added + ' (' + s.accounts.skipped + ' skipped), ' +
         'prompts: +' + s.prompts.added + ' (' + s.prompts.skipped + ' skipped), ' +
         'settings: +' + s.settings.added + ' (' + s.settings.skipped + ' skipped), ' +
@@ -64,7 +64,7 @@ function handleConfigImport(input) {
     .catch(() => {
       const el = document.getElementById('import-result');
       el.style.display = '';
-      el.innerHTML = '<div class="text-sm u-text-danger">Import failed. Check the file and try again.</div>';
+      el.innerHTML = '<div class="small text-danger">Import failed. Check the file and try again.</div>';
     });
 }
 </script>
