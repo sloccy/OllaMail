@@ -12,4 +12,4 @@ ENV PYTHONUNBUFFERED=1
 
 USER appuser
 
-CMD ["python", "-c", "from app.server import create_app; from waitress import serve; serve(create_app(), host='0.0.0.0', port=5000)"]
+CMD ["waitress-serve", "--host=0.0.0.0", "--port=5000", "--call", "app.server:create_app"]
