@@ -1,7 +1,5 @@
-<div class="card mb-3" id="prompt-card-{{ p.id }}" data-id="{{ p.id }}"
-     ondragover="onDragOver(event)"
-     ondragleave="onDragLeave(event)"
-     ondrop="onDrop(event)">
+{% from "macros.html" import action_checkboxes %}
+<div class="card mb-3" id="prompt-card-{{ p.id }}" data-id="{{ p.id }}">
   <div class="card-body">
     <div class="d-flex align-items-start gap-3">
       <div class="drag-handle text-muted">&#9776;</div>
@@ -35,12 +33,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Actions when matched</label>
-            <div class="d-flex flex-wrap gap-2 mt-1">
-              <div class="d-flex align-items-center gap-2 bg-base-300 border rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input mt-0" name="action_archive" value="1" id="ea-archive-{{ p.id }}" {% if p.action_archive %}checked{% endif %}><label class="mb-0" for="ea-archive-{{ p.id }}">Archive</label></div>
-              <div class="d-flex align-items-center gap-2 bg-base-300 border rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input mt-0" name="action_spam" value="1" id="ea-spam-{{ p.id }}" {% if p.action_spam %}checked{% endif %}><label class="mb-0" for="ea-spam-{{ p.id }}">Send to Spam</label></div>
-              <div class="d-flex align-items-center gap-2 bg-base-300 border rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input mt-0" name="action_trash" value="1" id="ea-trash-{{ p.id }}" {% if p.action_trash %}checked{% endif %}><label class="mb-0" for="ea-trash-{{ p.id }}">Trash</label></div>
-              <div class="d-flex align-items-center gap-2 bg-base-300 border rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input mt-0" name="action_mark_read" value="1" id="ea-read-{{ p.id }}" {% if p.action_mark_read %}checked{% endif %}><label class="mb-0" for="ea-read-{{ p.id }}">Mark as Read</label></div>
-            </div>
+            {{ action_checkboxes('ea-' ~ p.id, p) }}
           </div>
           <div class="d-flex align-items-center gap-2 border-top pt-3 mb-3">
             <input type="checkbox" class="form-check-input mt-0" name="stop_processing" value="1" id="ea-stop-{{ p.id }}" {% if p.stop_processing %}checked{% endif %}>

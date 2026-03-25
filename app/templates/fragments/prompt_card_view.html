@@ -1,12 +1,7 @@
-<div class="card mb-3" id="prompt-card-{{ p.id }}" data-id="{{ p.id }}"
-     ondragover="onDragOver(event)"
-     ondragleave="onDragLeave(event)"
-     ondrop="onDrop(event)">
+<div class="card mb-3" id="prompt-card-{{ p.id }}" data-id="{{ p.id }}">
   <div class="card-body">
     <div class="d-flex align-items-start justify-content-between gap-3">
-      <div class="drag-handle" title="Drag to reorder" draggable="true"
-           ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
-           ondragover="onDragOver(event)" ondrop="onDrop(event)">&#9776;</div>
+      <div class="drag-handle" title="Drag to reorder">&#9776;</div>
       <div class="flex-grow-1">
         <div class="fw-semibold mb-1">{{ p.name|e }}</div>
         <div class="font-monospace small text-muted mb-2">Created {{ p.created_at|fmtdate }}</div>

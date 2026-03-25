@@ -59,6 +59,8 @@
 [data-bs-theme="dark"] .text-bg-primary { background-color: var(--om-primary) !important; }
 [data-bs-theme="dark"] .border-primary { border-color: var(--om-primary) !important; }
 [data-bs-theme="dark"] .text-primary { color: var(--om-primary) !important; }
+[data-bs-theme="dark"] .text-success { color: var(--om-success) !important; }
+[data-bs-theme="dark"] .text-danger { color: var(--om-error) !important; }
 
 /* ===== Layout ===== */
 html, body { height: 100%; font-size: 14px; -webkit-font-smoothing: antialiased; }
@@ -136,8 +138,7 @@ h1,h2,h3,h4,h5,h6 { letter-spacing: -0.025em; }
 /* Drag */
 .drag-handle { cursor: grab; color: var(--om-text-60); font-size: 16px; padding: 0 8px 0 0; flex-shrink: 0; user-select: none; margin-top: 2px; }
 .drag-handle:active { cursor: grabbing; }
-.card.dragging { opacity: 0.4; border-color: var(--om-primary) !important; }
-.card.drag-over { border-color: var(--om-primary) !important; border-style: dashed !important; }
+.drag-ghost { opacity: 0.4; border-color: var(--om-primary) !important; border-style: dashed !important; }
 
 /* Setting rows */
 .setting-row { transition: background 0.15s; }
@@ -198,11 +199,11 @@ h1,h2,h3,h4,h5,h6 { letter-spacing: -0.025em; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
 
 /* App color helpers */
-.text-app-primary { color: var(--om-primary); }
-.text-app-success { color: var(--om-success); }
-.text-app-error { color: var(--om-error); }
 .bg-base-200 { background-color: var(--om-bg-200); }
 .bg-base-300 { background-color: var(--om-bg-300); }
+
+/* OAuth step badge */
+.step-badge { width: 1.75rem; height: 1.75rem; display: inline-flex; align-items: center; justify-content: center; margin-top: 2px; }
 
 /* 2-column form grid (collapses on small screens) */
 .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; }

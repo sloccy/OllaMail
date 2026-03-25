@@ -1,3 +1,4 @@
+{% from "macros.html" import action_checkboxes, step_badge %}
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
 <head>
@@ -10,6 +11,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js" defer></script>
   <script src="https://unpkg.com/htmx.org@2.0.8" defer></script>
   <script src="https://unpkg.com/htmx-ext-sse@2.2.4/sse.js" defer></script>
 </head>
@@ -78,7 +80,7 @@
         <h6 class="text-primary mb-3">Connect a Gmail Account</h6>
         <div>
           <div class="d-flex gap-3 mb-4" id="oauth-step-1">
-            <div class="badge border border-primary text-primary font-monospace flex-shrink-0" style="width:1.75rem;height:1.75rem;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">1</div>
+            {{ step_badge(1) }}
             <div class="flex-grow-1">
               <div class="fw-medium mb-2">Generate authorization link</div>
               <div class="small text-muted mb-2">Click below to generate a Google authorization URL.</div>
@@ -90,7 +92,7 @@
             </div>
           </div>
           <div class="d-flex gap-3 mb-4" id="oauth-step-2">
-            <div class="badge border border-primary text-primary font-monospace flex-shrink-0" style="width:1.75rem;height:1.75rem;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">2</div>
+            {{ step_badge(2) }}
             <div id="oauth-step-2-body">
               <div class="flex-grow-1">
                 <div class="fw-medium mb-2">Open the link and approve access</div>
@@ -99,7 +101,7 @@
             </div>
           </div>
           <div class="d-flex gap-3 mb-4" id="oauth-step-3">
-            <div class="badge border border-primary text-primary font-monospace flex-shrink-0" style="width:1.75rem;height:1.75rem;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">3</div>
+            {{ step_badge(3) }}
             <div class="flex-grow-1">
               <div class="fw-medium mb-2">Paste the redirect URL</div>
               <div class="small text-muted mb-2">After approving, your browser will redirect to <code class="font-monospace">http://localhost/?code=...</code> which fails to load. Copy the full URL from your address bar and paste it here.</div>
@@ -176,12 +178,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Actions when matched</label>
-            <div class="d-flex flex-wrap gap-2 mt-1">
-              <div class="d-flex align-items-center gap-2 bg-base-300 border rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input mt-0" name="action_archive" value="1" id="new-action-archive"><label class="mb-0" for="new-action-archive">Archive</label></div>
-              <div class="d-flex align-items-center gap-2 bg-base-300 border rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input mt-0" name="action_spam" value="1" id="new-action-spam"><label class="mb-0" for="new-action-spam">Send to Spam</label></div>
-              <div class="d-flex align-items-center gap-2 bg-base-300 border rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input mt-0" name="action_trash" value="1" id="new-action-trash"><label class="mb-0" for="new-action-trash">Trash</label></div>
-              <div class="d-flex align-items-center gap-2 bg-base-300 border rounded-2 px-3 py-2"><input type="checkbox" class="form-check-input mt-0" name="action_mark_read" value="1" id="new-action-mark-read"><label class="mb-0" for="new-action-mark-read">Mark as Read</label></div>
-            </div>
+            {{ action_checkboxes('new-action') }}
           </div>
           <div class="d-flex align-items-center gap-2 border-top pt-3 mb-3">
             <input type="checkbox" class="form-check-input mt-0" name="stop_processing" value="1" id="new-stop-processing">
@@ -413,61 +410,31 @@
     window.location.href = `/api/logs/download?start=${encodeURIComponent(toUTC(start))}&end=${encodeURIComponent(toUTC(end))}`;
   }
 
-  // ---- Drag to reorder ----
-  let _dragSrcId = null;
+  // ---- Drag to reorder (SortableJS) ----
+  let _promptsSortable = null;
 
-  function onDragStart(e) {
-    const card = e.currentTarget.closest('.card');
-    _dragSrcId = parseInt(card.dataset.id);
-    card.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-  }
-
-  function onDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const card = e.currentTarget.closest('.card[data-id]') || e.currentTarget;
-    if (parseInt(card.dataset.id) !== _dragSrcId) card.classList.add('drag-over');
-  }
-
-  function onDragLeave(e) {
-    const card = e.currentTarget.closest('.card[data-id]') || e.currentTarget;
-    card.classList.remove('drag-over');
-  }
-
-  function onDragEnd(e) {
-    document.querySelectorAll('.card').forEach(c => c.classList.remove('dragging', 'drag-over'));
-  }
-
-  async function onDrop(e) {
-    e.preventDefault();
-    const card = e.currentTarget.closest('.card[data-id]') || e.currentTarget;
-    const targetId = parseInt(card.dataset.id);
-    card.classList.remove('drag-over');
-    if (!_dragSrcId || _dragSrcId === targetId) return;
-    const cards = [...document.querySelectorAll('#prompts-list .card[data-id]')];
-    const orderedIds = cards.map(c => parseInt(c.dataset.id));
-    const srcIdx = orderedIds.indexOf(_dragSrcId);
-    const tgtIdx = orderedIds.indexOf(targetId);
-    orderedIds.splice(srcIdx, 1);
-    orderedIds.splice(tgtIdx, 0, _dragSrcId);
-    _dragSrcId = null;
-    const resp = await fetch('/api/prompts/reorder', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ordered_ids: orderedIds }),
+  document.getElementById('prompts-list').addEventListener('htmx:afterSwap', function() {
+    _promptsSortable?.destroy();
+    _promptsSortable = new Sortable(this, {
+      handle: '.drag-handle',
+      draggable: '.card[data-id]',
+      animation: 150,
+      ghostClass: 'drag-ghost',
+      async onEnd() {
+        const list = document.getElementById('prompts-list');
+        const orderedIds = [...list.querySelectorAll('.card[data-id]')].map(c => parseInt(c.dataset.id));
+        const resp = await fetch('/api/prompts/reorder', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ordered_ids: orderedIds }),
+        });
+        if (!resp.ok) {
+          toast('Failed to save order.', 'error');
+          const accountId = document.getElementById('prompt-filter-account')?.value || '';
+          htmx.ajax('GET', accountId ? `/fragments/prompts?account_id=${accountId}` : '/fragments/prompts', { target: '#prompts-list', swap: 'innerHTML' });
+        }
+      },
     });
-    if (resp.ok) {
-      const list = document.getElementById('prompts-list');
-      for (const id of orderedIds) {
-        const el = list.querySelector(`.card[data-id="${id}"]`);
-        if (el) list.appendChild(el);
-      }
-    } else {
-      toast('Failed to save order.', 'error');
-      const accountId = document.getElementById('prompt-filter-account')?.value || '';
-      htmx.ajax('GET', accountId ? `/fragments/prompts?account_id=${accountId}` : '/fragments/prompts', { target: '#prompts-list', swap: 'innerHTML' });
-    }
-  }
+  });
 
   // ---- Builder SSE ----
   function generatePrompt() {
