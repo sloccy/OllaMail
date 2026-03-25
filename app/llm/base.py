@@ -14,6 +14,12 @@ class LLMProvider(ABC):
         Raises on failure so callers can surface the error."""
         ...
 
+    @abstractmethod
+    def stream_generate_prompt_instruction(self, description: str):
+        """Stream a classifier instruction as (type, text) events.
+        Yields dicts with keys 'type' ('think'|'content') and 'text'."""
+        ...
+
     def ensure_model_pulled(self) -> None:
         """Pull/warm up the model if needed. No-op by default."""
         pass
