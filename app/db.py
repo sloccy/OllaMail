@@ -381,6 +381,11 @@ def trim_logs():
         _execute("DELETE FROM logs WHERE timestamp < datetime(?, 'unixepoch')", (cutoff,))
 
 
+def count_active_prompts():
+    row = _fetch_one("SELECT COUNT(*) AS n FROM prompts WHERE active = 1")
+    return row["n"] if row else 0
+
+
 def get_logs(limit=100):
     return _fetch_all("SELECT * FROM logs ORDER BY id DESC LIMIT ?", (limit,))
 
