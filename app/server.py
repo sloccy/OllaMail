@@ -78,6 +78,36 @@ def _safe_accounts():
     return db.list_accounts_safe()
 
 
+def _account_map():
+    return {a["id"]: a["email"] for a in db.list_accounts_safe()}
+
+
+def _htmx_toast(msg, category="error", status=400):
+    resp = make_response("", status)
+    resp.headers["HX-Trigger"] = json.dumps({"showToast": {"message": msg, "type": category}})
+    return resp
+
+
+def _settings_context():
+    return {
+        "poll_interval": int(db.get_setting("poll_interval", str(POLL_INTERVAL))),
+        "ollama_model": OLLAMA_MODEL,
+        "ollama_host": OLLAMA_HOST,
+    }
+
+
+def _parse_prompt_actions(form):
+    account_id = form.get("account_id") or None
+    return {
+        "action_archive": int(bool(form.get("action_archive"))),
+        "action_spam": int(bool(form.get("action_spam"))),
+        "action_trash": int(bool(form.get("action_trash"))),
+        "action_mark_read": int(bool(form.get("action_mark_read"))),
+        "stop_processing": int(bool(form.get("stop_processing"))),
+        "account_id": int(account_id) if account_id else None,
+    }
+
+
 # ---- UI ----
 
 
@@ -390,20 +420,10 @@ def frag_create_prompt():
             {"prompts": db.list_prompts(), "accounts": _safe_accounts()},
             toast={"message": "name, instructions, and label_name are required", "type": "error"},
         )
-    account_id = f.get("account_id") or None
-    db.create_prompt(
-        name,
-        instructions,
-        label_name,
-        action_archive=int(bool(f.get("action_archive"))),
-        action_spam=int(bool(f.get("action_spam"))),
-        action_trash=int(bool(f.get("action_trash"))),
-        action_mark_read=int(bool(f.get("action_mark_read"))),
-        stop_processing=int(bool(f.get("stop_processing"))),
-        account_id=int(account_id) if account_id else None,
-    )
-    _ensure_label_for_accounts(int(account_id) if account_id else None, label_name)
-    scope = f"account {account_id}" if account_id else "all accounts"
+    actions = _parse_prompt_actions(f)
+    db.create_prompt(name, instructions, label_name, **actions)
+    _ensure_label_for_accounts(actions["account_id"], label_name)
+    scope = f"account {actions['account_id']}" if actions["account_id"] else "all accounts"
     db.add_log("INFO", f"Prompt created: {name} → label '{label_name}' ({scope})")
     prompts = db.list_prompts()
     accounts = _safe_accounts()
@@ -419,21 +439,9 @@ def frag_update_prompt(prompt_id):
     instructions = f.get("instructions", "").strip()
     label_name = f.get("label_name", "").strip()
     active = int(f.get("active", 1))
-    account_id = f.get("account_id") or None
-    db.update_prompt(
-        prompt_id,
-        name,
-        instructions,
-        label_name,
-        active,
-        action_archive=int(bool(f.get("action_archive"))),
-        action_spam=int(bool(f.get("action_spam"))),
-        action_trash=int(bool(f.get("action_trash"))),
-        action_mark_read=int(bool(f.get("action_mark_read"))),
-        stop_processing=int(bool(f.get("stop_processing"))),
-        account_id=int(account_id) if account_id else None,
-    )
-    _ensure_label_for_accounts(int(account_id) if account_id else None, label_name)
+    actions = _parse_prompt_actions(f)
+    db.update_prompt(prompt_id, name, instructions, label_name, active, **actions)
+    _ensure_label_for_accounts(actions["account_id"], label_name)
     prompts = db.list_prompts()
     accounts = _safe_accounts()
     return fragment_response(
@@ -458,10 +466,9 @@ def frag_toggle_prompt(prompt_id):
         return "", 404
     p = db.get_prompt(prompt_id)
     accounts = _safe_accounts()
-    account_map = {a["id"]: a["email"] for a in accounts}
     msg = "Rule paused." if not new_active else "Rule resumed."
     return fragment_response(
-        "fragments/prompt_card_view.html", {"p": p, "accounts": accounts, "account_map": account_map}, toast=msg
+        "fragments/prompt_card_view.html", {"p": p, "accounts": accounts, "account_map": _account_map()}, toast=msg
     )
 
 
@@ -471,9 +478,8 @@ def frag_prompt_edit(prompt_id):
     if not p:
         return "", 404
     accounts = _safe_accounts()
-    account_map = {a["id"]: a["email"] for a in accounts}
     return fragment_response(
-        "fragments/prompt_card_edit.html", {"p": p, "accounts": accounts, "account_map": account_map}
+        "fragments/prompt_card_edit.html", {"p": p, "accounts": accounts, "account_map": _account_map()}
     )
 
 
@@ -483,22 +489,14 @@ def frag_prompt_view(prompt_id):
     if not p:
         return "", 404
     accounts = _safe_accounts()
-    account_map = {a["id"]: a["email"] for a in accounts}
     return fragment_response(
-        "fragments/prompt_card_view.html", {"p": p, "accounts": accounts, "account_map": account_map}
+        "fragments/prompt_card_view.html", {"p": p, "accounts": accounts, "account_map": _account_map()}
     )
 
 
 @app.route("/fragments/settings")
 def frag_get_settings():
-    return fragment_response(
-        "fragments/settings_form.html",
-        {
-            "poll_interval": int(db.get_setting("poll_interval", str(POLL_INTERVAL))),
-            "ollama_model": OLLAMA_MODEL,
-            "ollama_host": OLLAMA_HOST,
-        },
-    )
+    return fragment_response("fragments/settings_form.html", _settings_context())
 
 
 @app.route("/fragments/settings", methods=["PATCH"])
@@ -507,27 +505,17 @@ def frag_update_settings():
     if "poll_interval" in f:
         val = int(f["poll_interval"])
         if val < MIN_POLL_INTERVAL:
+            ctx = _settings_context()
+            ctx["poll_interval"] = val
             return fragment_response(
                 "fragments/settings_form.html",
-                {
-                    "poll_interval": val,
-                    "ollama_model": OLLAMA_MODEL,
-                    "ollama_host": OLLAMA_HOST,
-                },
+                ctx,
                 toast={"message": f"Minimum poll interval is {MIN_POLL_INTERVAL} seconds", "type": "error"},
             )
         db.set_setting("poll_interval", str(val))
         db.add_log("INFO", f"Settings updated: poll_interval={val}s")
         poller.update_interval(val)
-    return fragment_response(
-        "fragments/settings_form.html",
-        {
-            "poll_interval": int(db.get_setting("poll_interval", str(POLL_INTERVAL))),
-            "ollama_model": OLLAMA_MODEL,
-            "ollama_host": OLLAMA_HOST,
-        },
-        toast="Settings saved.",
-    )
+    return fragment_response("fragments/settings_form.html", _settings_context(), toast="Settings saved.")
 
 
 @app.route("/fragments/logs")
@@ -608,7 +596,10 @@ def frag_set_retention(account_id):
     f = request.form
     enabled = bool(f.get("enabled"))
     if enabled:
-        value = int(f.get("value", 1))
+        try:
+            value = int(f.get("value", 1))
+        except ValueError:
+            return _retention_panel(account_id, account, toast={"message": "Invalid value.", "type": "error"})
         days = value * 365 if f.get("unit") == "years" else value
         if days < 1:
             return _retention_panel(account_id, account, toast={"message": "Days must be at least 1.", "type": "error"})
@@ -629,7 +620,10 @@ def frag_add_label_retention(account_id):
     value = f.get("value", "")
     if not label_name or not value:
         return _retention_panel(account_id, account, toast={"message": "Label and days are required.", "type": "error"})
-    days = int(value) * 365 if f.get("unit") == "years" else int(value)
+    try:
+        days = int(value) * 365 if f.get("unit") == "years" else int(value)
+    except ValueError:
+        return _retention_panel(account_id, account, toast={"message": "Invalid days value.", "type": "error"})
     if days >= 1:
         db.add_label_retention(account_id, label_name, days)
     return _retention_panel(account_id, account, toast="Label rule added.")
@@ -666,51 +660,31 @@ def frag_oauth_start():
         auth_url = gmail_client.get_auth_url(state)
         return fragment_response("fragments/oauth_step2.html", {"auth_url": auth_url})
     except FileNotFoundError:
-        resp = make_response("credentials.json not found.", 500)
-        resp.headers["HX-Trigger"] = json.dumps(
-            {
-                "showToast": {
-                    "message": "credentials.json not found. Place your Google OAuth credentials file at /credentials/credentials.json.",
-                    "type": "error",
-                }
-            }
+        return _htmx_toast(
+            "credentials.json not found. Place your Google OAuth credentials file at /credentials/credentials.json.",
+            status=500,
         )
-        return resp
     except Exception as e:
-        resp = make_response(str(e), 500)
-        resp.headers["HX-Trigger"] = json.dumps({"showToast": {"message": str(e), "type": "error"}})
-        return resp
+        return _htmx_toast(str(e), status=500)
 
 
 @app.route("/fragments/oauth/exchange", methods=["POST"])
 def frag_oauth_exchange():
     pasted_url = (request.form.get("url") or "").strip()
     if not pasted_url:
-        resp = make_response("", 400)
-        resp.headers["HX-Trigger"] = json.dumps({"showToast": {"message": "No URL provided.", "type": "error"}})
-        return resp
+        return _htmx_toast("No URL provided.")
     try:
         parsed = urlparse(pasted_url)
         params = parse_qs(parsed.query)
         code = params.get("code", [None])[0]
         state = params.get("state", [None])[0]
     except Exception:
-        resp = make_response("", 400)
-        resp.headers["HX-Trigger"] = json.dumps({"showToast": {"message": "Could not parse the URL.", "type": "error"}})
-        return resp
+        return _htmx_toast("Could not parse the URL.")
     if not code:
-        resp = make_response("", 400)
-        resp.headers["HX-Trigger"] = json.dumps(
-            {"showToast": {"message": "No authorization code found in the URL.", "type": "error"}}
-        )
-        return resp
+        return _htmx_toast("No authorization code found in the URL.")
     expected_state = session.get("oauth_state")
     if not expected_state or state != expected_state:
-        resp = make_response("", 400)
-        resp.headers["HX-Trigger"] = json.dumps(
-            {"showToast": {"message": "State mismatch. Please start the authorization process again.", "type": "error"}}
-        )
-        return resp
+        return _htmx_toast("State mismatch. Please start the authorization process again.")
     try:
         email, credentials_json = gmail_client.exchange_code(state, code)
         db.upsert_account(email, credentials_json)
@@ -726,9 +700,7 @@ def frag_oauth_exchange():
         return resp
     except Exception as e:
         db.add_log("ERROR", f"OAuth exchange failed: {e}")
-        resp = make_response("", 500)
-        resp.headers["HX-Trigger"] = json.dumps({"showToast": {"message": str(e), "type": "error"}})
-        return resp
+        return _htmx_toast(str(e), status=500)
 
 
 @app.route("/fragments/scan", methods=["POST"])

@@ -9,6 +9,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app import db
 from app.config import EMAIL_BODY_TRUNCATION, GMAIL_LOOKBACK_HOURS, GMAIL_MAX_RESULTS
@@ -22,6 +24,21 @@ CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "/credentials/credentials.json"
 REDIRECT_URI = "http://localhost"
 
 _label_cache: TTLCache = TTLCache(maxsize=32, ttl=300)
+_service_keys: dict[int, str] = {}
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    if isinstance(exc, HttpError):
+        return exc.resp.status in (429, 500, 502, 503)
+    return isinstance(exc, (OSError, ConnectionError, TimeoutError))
+
+
+_gmail_retry = retry(
+    retry=retry_if_exception(_is_retryable),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    reraise=True,
+)
 
 
 def get_auth_url(state: str) -> str:
@@ -57,7 +74,7 @@ def get_service(credentials_json: str):
         creds.refresh(Request())
         refreshed = creds.to_json()
     service = build("gmail", "v1", credentials=creds)
-    service._sk = creds.refresh_token  # stable cache key set at construction time
+    _service_keys[id(service)] = creds.refresh_token
     return service, refreshed
 
 
@@ -70,7 +87,7 @@ def get_service_and_refresh(account: dict):
 
 
 def _cache_key(service) -> str:
-    return service._sk
+    return _service_keys[id(service)]
 
 
 def build_label_cache(service, label_names: list) -> dict:
@@ -96,6 +113,7 @@ def build_label_cache(service, label_names: list) -> dict:
     return cache
 
 
+@_gmail_retry
 def list_recent_message_ids(service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS) -> list:
     after_ts = int(time.time() - lookback_hours * 3600)
     response = (
@@ -150,6 +168,7 @@ def fetch_message_details(service, message_ids: list) -> list:
     return emails
 
 
+@_gmail_retry
 def list_labels(service) -> list:
     key = _cache_key(service)
     if key in _label_cache:
@@ -180,6 +199,7 @@ def fetch_emails_older_than(service, days: int, label_name: str = None, excluded
     return ids
 
 
+@_gmail_retry
 def batch_modify_emails(service, modifications: list) -> None:
     """Apply label modifications using batchModify. Groups by identical add/remove combos."""
     if not modifications:
