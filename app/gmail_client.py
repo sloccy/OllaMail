@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import base64
@@ -9,6 +10,8 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
 from app.config import GMAIL_MAX_RESULTS, GMAIL_LOOKBACK_HOURS, EMAIL_BODY_TRUNCATION
 import time
+
+_log = logging.getLogger(__name__)
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
@@ -42,7 +45,7 @@ def exchange_code(state: str, code: str) -> tuple[str, str]:
 
 
 def _get_email(creds: Credentials) -> str:
-    svc = build("oauth2", "v2", credentials=creds, cache_discovery=False)
+    svc = build("oauth2", "v2", credentials=creds)
     return svc.userinfo().get().execute()["email"]
 
 
@@ -53,12 +56,13 @@ def get_service(credentials_json: str):
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
         refreshed = creds.to_json()
-    service = build("gmail", "v1", credentials=creds, cache_discovery=False)
+    service = build("gmail", "v1", credentials=creds)
+    service._sk = creds.refresh_token  # stable cache key set at construction time
     return service, refreshed
 
 
 def _cache_key(service) -> str:
-    return service._http.credentials.refresh_token
+    return service._sk
 
 
 def build_label_cache(service, label_names: list) -> dict:
@@ -97,6 +101,8 @@ def fetch_message_details(service, message_ids: list) -> list:
     def _callback(request_id, response, exception):
         if exception is None:
             results[request_id] = response
+        else:
+            _log.warning("Batch fetch failed for message %s: %s", request_id, exception)
 
     for i in range(0, len(message_ids), 100):
         batch = service.new_batch_http_request(callback=_callback)
