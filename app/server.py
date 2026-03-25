@@ -529,13 +529,20 @@ def frag_history_filters():
                              {"accounts": accounts, "prompts": prompts})
 
 
-def _retention_panel(account_id, account=None, toast=None):
-    """Return retention panel fragment with Gmail labels fetched from the account."""
+def _retention_panel(account_id, account=None, service=None, toast=None):
     if account is None:
         account = db.get_account(account_id)
     retention = db.get_retention(account_id)
+    if account is None:
+        return fragment_response("fragments/retention_panel.html",
+                                 {"retention": retention, "account_id": account_id,
+                                  "gmail_labels": []},
+                                 toast=toast)
     try:
-        service, _ = gmail_client.get_service(account["credentials_json"])
+        if service is None:
+            service, refreshed = gmail_client.get_service(account["credentials_json"])
+            if refreshed and refreshed != account["credentials_json"]:
+                db.update_account_credentials(account_id, refreshed)
         gmail_labels = gmail_client.list_labels(service)
     except Exception:
         gmail_labels = []
@@ -550,15 +557,15 @@ def frag_retention(account_id):
     account = db.get_account(account_id)
     if not account:
         return "", 404
-    # Refresh credentials if needed
+    service = None
     try:
         service, refreshed = gmail_client.get_service(account["credentials_json"])
         if refreshed and refreshed != account["credentials_json"]:
             db.update_account_credentials(account_id, refreshed)
             account["credentials_json"] = refreshed
-    except Exception:
-        pass
-    return _retention_panel(account_id, account)
+    except Exception as e:
+        db.add_log("WARNING", f"Could not refresh credentials for account {account_id}: {e}")
+    return _retention_panel(account_id, account, service=service)
 
 
 @app.route("/fragments/retention/<int:account_id>", methods=["POST"])

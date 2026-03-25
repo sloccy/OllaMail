@@ -360,13 +360,17 @@ def add_categorization(account_id, account_email, message_id, subject, sender,
 def get_categorization_history(account_id=None, prompt_id=None, subject=None, sender=None, limit=200):
     wheres, params = [], []
     if account_id is not None:
-        wheres.append("account_id = ?"); params.append(account_id)
+        wheres.append("account_id = ?")
+        params.append(account_id)
     if prompt_id is not None:
-        wheres.append("prompt_id = ?"); params.append(prompt_id)
+        wheres.append("prompt_id = ?")
+        params.append(prompt_id)
     if subject:
-        wheres.append("subject LIKE ?"); params.append(f"%{subject}%")
+        wheres.append("subject LIKE ?")
+        params.append(f"%{subject}%")
     if sender:
-        wheres.append("sender LIKE ?"); params.append(f"%{sender}%")
+        wheres.append("sender LIKE ?")
+        params.append(f"%{sender}%")
     params.append(limit)
     sql = "SELECT * FROM categorization_history"
     if wheres:

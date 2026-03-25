@@ -132,7 +132,7 @@ No explanation, no markdown, just the JSON object."""
     def _generate_options(self, temperature=0.7, num_predict=None) -> dict:
         return {
             "temperature": temperature,
-            "num_predict": num_predict or OLLAMA_GENERATE_NUM_PREDICT,
+            "num_predict": num_predict if num_predict is not None else OLLAMA_GENERATE_NUM_PREDICT,
             "num_ctx": OLLAMA_NUM_CTX,
         }
 
