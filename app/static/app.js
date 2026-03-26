@@ -41,6 +41,19 @@ function exportPrompts() {
     : `/api/prompts/export?name=all`;
 }
 
+// ---- Toggle log download panel ----
+function toggleLogDownloadPanel() {
+  const p = document.getElementById('log-download-panel');
+  p.classList.toggle('d-none');
+  if (!p.classList.contains('d-none')) {
+    const now = new Date();
+    const yesterday = new Date(now - 86400000);
+    const toLocal = d => new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.getElementById('log-dl-end').value = toLocal(now);
+    document.getElementById('log-dl-start').value = toLocal(yesterday);
+  }
+}
+
 // ---- Download logs ----
 function downloadLogs() {
   const start = document.getElementById('log-dl-start').value;
@@ -207,11 +220,10 @@ document.body.addEventListener('showToast', function(e) {
 
 document.body.addEventListener('closeOAuthPanel', function() {
   document.getElementById('add-account-panel').classList.add('d-none');
-  const step2 = document.getElementById('oauth-step-2-body');
-  const title = document.createElement('div'); title.className = 'fw-medium mb-2'; title.textContent = 'Open the link and approve access';
-  const hint = document.createElement('div'); hint.className = 'small text-muted mb-2'; hint.textContent = 'Click "Generate Link" first.';
-  const wrap = document.createElement('div'); wrap.className = 'flex-grow-1';
-  wrap.append(title, hint);
-  step2.replaceChildren(wrap);
+  document.getElementById('oauth-step-2-body').innerHTML =
+    '<div class="flex-grow-1">' +
+    '<div class="fw-medium mb-2">Open the link and approve access</div>' +
+    '<div class="small text-muted mb-2">Click "Generate Link" first.</div>' +
+    '</div>';
   document.getElementById('oauth-step-1').classList.remove('done');
 });
