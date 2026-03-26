@@ -47,8 +47,7 @@ def stop() -> None:
 
 
 def run_now() -> None:
-    if not _scan_lock.locked():
-        _scheduler.add_job(_run_scan, id="poll", replace_existing=True)
+    threading.Thread(target=_run_scan, daemon=True).start()
 
 
 def update_interval(seconds: int) -> None:
