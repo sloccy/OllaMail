@@ -293,16 +293,16 @@ def add_label_retention(account_id, label_name, days):
     LabelRetention.replace(account_id=account_id, label_name=label_name, days=days).execute()
 
 
-def delete_label_retention(rule_id):
-    LabelRetention.delete_by_id(rule_id)
+def delete_label_retention(rule_id, account_id):
+    LabelRetention.delete().where(LabelRetention.id == rule_id, LabelRetention.account_id == account_id).execute()
 
 
 def add_label_exemption(account_id, label_name):
     LabelExemption.insert(account_id=account_id, label_name=label_name).on_conflict_ignore().execute()
 
 
-def delete_label_exemption(exemption_id):
-    LabelExemption.delete_by_id(exemption_id)
+def delete_label_exemption(exemption_id, account_id):
+    LabelExemption.delete().where(LabelExemption.id == exemption_id, LabelExemption.account_id == account_id).execute()
 
 
 # ---- Import helpers ----

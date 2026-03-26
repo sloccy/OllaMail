@@ -244,24 +244,24 @@ def batch_trash_emails(service, message_ids: list) -> int:
 
 
 def _extract_body(payload) -> str:
-    if "parts" in payload:
-        for part in payload["parts"]:
-            if part["mimeType"] == "text/plain":
-                data = part["body"].get("data", "")
-                if data:
-                    return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
-        for part in payload["parts"]:
-            if part["mimeType"] == "text/html":
-                data = part["body"].get("data", "")
-                if data:
-                    html = base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
-                    return BeautifulSoup(html, "html.parser").get_text(separator="\n", strip=True)
-        for part in payload["parts"]:
-            result = _extract_body(part)
-            if result:
-                return result
-    else:
+    if "parts" not in payload:
         data = payload.get("body", {}).get("data", "")
-        if data:
-            return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+        return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore") if data else ""
+    # Single pass: collect plain/html data references (prefer plain, decode lazily)
+    plain_data = html_data = ""
+    for part in payload["parts"]:
+        if part["mimeType"] == "text/plain" and not plain_data:
+            plain_data = part["body"].get("data", "")
+        elif part["mimeType"] == "text/html" and not html_data:
+            html_data = part["body"].get("data", "")
+    if plain_data:
+        return base64.urlsafe_b64decode(plain_data).decode("utf-8", errors="ignore")
+    if html_data:
+        html = base64.urlsafe_b64decode(html_data).decode("utf-8", errors="ignore")
+        return BeautifulSoup(html, "html.parser").get_text(separator="\n", strip=True)
+    # Recurse into nested parts (e.g., multipart/alternative within multipart/mixed)
+    for part in payload["parts"]:
+        result = _extract_body(part)
+        if result:
+            return result
     return ""
