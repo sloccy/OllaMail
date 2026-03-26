@@ -78,9 +78,13 @@ def get_service(credentials_json: str):
     """Load and refresh credentials. Returns (service, refreshed_json_or_None)."""
     creds = Credentials.from_authorized_user_info(json.loads(credentials_json), SCOPES)
     refreshed = None
-    if creds.expired and creds.refresh_token:
+    if creds.expired:
+        if not creds.refresh_token:
+            raise ValueError("Credentials are expired and no refresh token is available. Please reconnect the account.")
         creds.refresh(Request())
         refreshed = creds.to_json()
+    if not creds.refresh_token:
+        raise ValueError("Credentials have no refresh token. Please reconnect the account.")
     service = build("gmail", "v1", credentials=creds)
     service._cache_key = creds.refresh_token
     return service, refreshed
@@ -203,14 +207,15 @@ def list_labels(service) -> list:
     return labels
 
 
+@_gmail_retry
 def fetch_emails_older_than(service, days: int, label_name: str = None, excluded_labels: list = None) -> list:
     cutoff = datetime.date.today() - datetime.timedelta(days=days)
     query = f"before:{cutoff.strftime('%Y/%m/%d')}"
     if label_name:
-        query += f" label:{label_name}"
+        query += f' label:"{label_name}"'
     if excluded_labels:
         for lbl in excluded_labels:
-            query += f" -label:{lbl}"
+            query += f' -label:"{lbl}"'
     return _paginate_message_ids(
         service,
         service.users().messages().list(userId="me", q=query, maxResults=500),
