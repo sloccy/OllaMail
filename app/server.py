@@ -468,7 +468,7 @@ def frag_delete_prompt(prompt_id):
 def frag_toggle_prompt(prompt_id):
     new_active = db.toggle_prompt(prompt_id)
     if new_active is None:
-        return "", 404
+        return _htmx_toast("Not found.", status=404)
     p = db.get_prompt(prompt_id)
     accounts = _safe_accounts()
     msg = "Rule paused." if not new_active else "Rule resumed."
@@ -483,7 +483,7 @@ def frag_toggle_prompt(prompt_id):
 def frag_prompt_edit(prompt_id):
     p = db.get_prompt(prompt_id)
     if not p:
-        return "", 404
+        return _htmx_toast("Not found.", status=404)
     accounts = _safe_accounts()
     return fragment_response(
         "fragments/prompt_card_edit.html", {"p": p, "accounts": accounts, "account_map": _account_map(accounts)}
@@ -494,7 +494,7 @@ def frag_prompt_edit(prompt_id):
 def frag_prompt_view(prompt_id):
     p = db.get_prompt(prompt_id)
     if not p:
-        return "", 404
+        return _htmx_toast("Not found.", status=404)
     accounts = _safe_accounts()
     return fragment_response(
         "fragments/prompt_card_view.html", {"p": p, "accounts": accounts, "account_map": _account_map(accounts)}
@@ -587,7 +587,7 @@ def _retention_panel(account_id, account=None, service=None, toast=None):
 def frag_retention(account_id):
     account = db.get_account(account_id)
     if not account:
-        return "", 404
+        return _htmx_toast("Not found.", status=404)
     service = None
     try:
         service = gmail_client.get_service_and_refresh(account)
@@ -600,7 +600,7 @@ def frag_retention(account_id):
 def frag_set_retention(account_id):
     account = db.get_account(account_id)
     if not account:
-        return "", 404
+        return _htmx_toast("Not found.", status=404)
     f = request.form
     enabled = bool(f.get("enabled"))
     if enabled:
@@ -622,7 +622,7 @@ def frag_set_retention(account_id):
 def frag_add_label_retention(account_id):
     account = db.get_account(account_id)
     if not account:
-        return "", 404
+        return _htmx_toast("Not found.", status=404)
     f = request.form
     label_name = (f.get("label_name") or "").strip()
     value = f.get("value", "")
@@ -647,7 +647,7 @@ def frag_delete_label_retention(account_id, rule_id):
 def frag_add_exemption(account_id):
     account = db.get_account(account_id)
     if not account:
-        return "", 404
+        return _htmx_toast("Not found.", status=404)
     label_name = (request.form.get("label_name") or "").strip()
     if label_name:
         db.add_label_exemption(account_id, label_name)
