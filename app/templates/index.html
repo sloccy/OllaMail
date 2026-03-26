@@ -238,7 +238,7 @@
 
     <!-- Logs -->
     <div class="page" id="page-logs">
-      {% call page_header("Logs", "Last 100 events") %}<button class="btn btn-outline-secondary btn-sm" onclick="(function(p){p.classList.toggle('d-none');if(!p.classList.contains('d-none')){const now=new Date(),y=new Date(now-86400000),f=d=>new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);document.getElementById('log-dl-end').value=f(now);document.getElementById('log-dl-start').value=f(y);}})(document.getElementById('log-download-panel'))">&#8659; Download</button> <button class="btn btn-outline-secondary btn-sm" hx-get="/fragments/logs" hx-target="#logs-content" hx-swap="innerHTML">&#8635; Refresh</button>{% endcall %}
+      {% call page_header("Logs", "Last 100 events") %}<button class="btn btn-outline-secondary btn-sm" onclick="toggleLogDownloadPanel()">&#8659; Download</button> <button class="btn btn-outline-secondary btn-sm" hx-get="/fragments/logs" hx-target="#logs-content" hx-swap="innerHTML">&#8635; Refresh</button>{% endcall %}
       <div class="card p-4 mb-4 d-none" id="log-download-panel">
         <h6 class="text-primary mb-3">Download Logs</h6>
         <div class="form-grid-2 mb-3" style="max-width:560px;">
