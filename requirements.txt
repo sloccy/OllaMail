@@ -9,3 +9,4 @@ ollama>=0.4.0
 apscheduler>=3.10,<4
 tenacity>=8.0
 peewee>=4.0
+beautifulsoup4>=4.12
