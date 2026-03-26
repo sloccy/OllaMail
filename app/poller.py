@@ -36,7 +36,7 @@ def start() -> None:
         id="poll",
         max_instances=1,
         replace_existing=True,
-        next_run_time=datetime.datetime.now(),
+        next_run_time=datetime.datetime.now(datetime.UTC),
     )
     _scheduler.start()
 
