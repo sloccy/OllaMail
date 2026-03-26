@@ -102,6 +102,17 @@ def _htmx_toast(msg, category="error", status=400):
     return resp
 
 
+def _prompt_list_context(account_id=None):
+    accounts = _safe_accounts()
+    prompts = db.list_prompts(account_id=account_id) if account_id is not None else db.list_prompts()
+    return {"prompts": prompts, "accounts": accounts, "account_map": _account_map(accounts)}
+
+
+def _prompt_card_context(prompt):
+    accounts = _safe_accounts()
+    return {"p": prompt, "accounts": accounts, "account_map": _account_map(accounts)}
+
+
 def _settings_context():
     return {
         "poll_interval": int(db.get_setting("poll_interval", str(POLL_INTERVAL))),
@@ -419,11 +430,7 @@ def frag_delete_account(account_id):
 @app.route("/fragments/prompts")
 def frag_prompts():
     account_id = request.args.get("account_id", "")
-    prompts = db.list_prompts(account_id=int(account_id)) if account_id else db.list_prompts()
-    accounts = _safe_accounts()
-    return fragment_response(
-        "fragments/prompts_list.html", {"prompts": prompts, "accounts": accounts, "account_map": _account_map(accounts)}
-    )
+    return fragment_response("fragments/prompts_list.html", _prompt_list_context(int(account_id) if account_id else None))
 
 
 @app.route("/fragments/prompts", methods=["POST"])
@@ -433,10 +440,9 @@ def frag_create_prompt():
     instructions = f.get("instructions", "").strip()
     label_name = f.get("label_name", "").strip()
     if not name or not instructions or not label_name:
-        accounts = _safe_accounts()
         return fragment_response(
             "fragments/prompts_list.html",
-            {"prompts": db.list_prompts(), "accounts": accounts, "account_map": _account_map(accounts)},
+            _prompt_list_context(),
             toast={"message": "name, instructions, and label_name are required", "type": "error"},
         )
     actions = _parse_prompt_actions(f)
@@ -444,13 +450,7 @@ def frag_create_prompt():
     _ensure_label_for_accounts(actions["account_id"], label_name)
     scope = f"account {actions['account_id']}" if actions["account_id"] else "all accounts"
     db.add_log("INFO", f"Prompt created: {name} → label '{label_name}' ({scope})")
-    prompts = db.list_prompts()
-    accounts = _safe_accounts()
-    return fragment_response(
-        "fragments/prompts_list.html",
-        {"prompts": prompts, "accounts": accounts, "account_map": _account_map(accounts)},
-        toast="Rule created.",
-    )
+    return fragment_response("fragments/prompts_list.html", _prompt_list_context(), toast="Rule created.")
 
 
 @app.route("/fragments/prompts/<int:prompt_id>", methods=["PUT"])
@@ -463,25 +463,13 @@ def frag_update_prompt(prompt_id):
     actions = _parse_prompt_actions(f)
     db.update_prompt(prompt_id, name, instructions, label_name, active, **actions)
     _ensure_label_for_accounts(actions["account_id"], label_name)
-    prompts = db.list_prompts()
-    accounts = _safe_accounts()
-    return fragment_response(
-        "fragments/prompts_list.html",
-        {"prompts": prompts, "accounts": accounts, "account_map": _account_map(accounts)},
-        toast="Rule updated.",
-    )
+    return fragment_response("fragments/prompts_list.html", _prompt_list_context(), toast="Rule updated.")
 
 
 @app.route("/fragments/prompts/<int:prompt_id>", methods=["DELETE"])
 def frag_delete_prompt(prompt_id):
     db.delete_prompt(prompt_id)
-    prompts = db.list_prompts()
-    accounts = _safe_accounts()
-    return fragment_response(
-        "fragments/prompts_list.html",
-        {"prompts": prompts, "accounts": accounts, "account_map": _account_map(accounts)},
-        toast="Rule deleted.",
-    )
+    return fragment_response("fragments/prompts_list.html", _prompt_list_context(), toast="Rule deleted.")
 
 
 @app.route("/fragments/prompts/<int:prompt_id>/toggle", methods=["POST"])
@@ -489,14 +477,8 @@ def frag_toggle_prompt(prompt_id):
     new_active = db.toggle_prompt(prompt_id)
     if new_active is None:
         return _htmx_toast("Not found.", status=404)
-    p = db.get_prompt(prompt_id)
-    accounts = _safe_accounts()
     msg = "Rule paused." if not new_active else "Rule resumed."
-    return fragment_response(
-        "fragments/prompt_card_view.html",
-        {"p": p, "accounts": accounts, "account_map": _account_map(accounts)},
-        toast=msg,
-    )
+    return fragment_response("fragments/prompt_card_view.html", _prompt_card_context(db.get_prompt(prompt_id)), toast=msg)
 
 
 @app.route("/fragments/prompts/<int:prompt_id>/edit")
@@ -504,10 +486,7 @@ def frag_prompt_edit(prompt_id):
     p = db.get_prompt(prompt_id)
     if not p:
         return _htmx_toast("Not found.", status=404)
-    accounts = _safe_accounts()
-    return fragment_response(
-        "fragments/prompt_card_edit.html", {"p": p, "accounts": accounts, "account_map": _account_map(accounts)}
-    )
+    return fragment_response("fragments/prompt_card_edit.html", _prompt_card_context(p))
 
 
 @app.route("/fragments/prompts/<int:prompt_id>/view")
@@ -515,10 +494,7 @@ def frag_prompt_view(prompt_id):
     p = db.get_prompt(prompt_id)
     if not p:
         return _htmx_toast("Not found.", status=404)
-    accounts = _safe_accounts()
-    return fragment_response(
-        "fragments/prompt_card_view.html", {"p": p, "accounts": accounts, "account_map": _account_map(accounts)}
-    )
+    return fragment_response("fragments/prompt_card_view.html", _prompt_card_context(p))
 
 
 @app.route("/fragments/settings")
