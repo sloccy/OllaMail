@@ -226,7 +226,7 @@ def api_export_prompts():
     return Response(
         json.dumps(export_data, indent=2),
         mimetype="application/json",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -284,7 +284,7 @@ def api_export_config():
     return Response(
         json.dumps(payload, indent=2),
         mimetype="application/json",
-        headers={"Content-Disposition": f"attachment; filename=config-backup-{date_str}.json"},
+        headers={"Content-Disposition": f'attachment; filename="config-backup-{date_str}.json"'},
     )
 
 
@@ -386,7 +386,9 @@ def api_import_config():
             else:
                 summary["retention"]["skipped"] += 1
         for ex in ret.get("exemptions", []):
-            db.add_label_exemption(account_id, ex["label_name"])
+            label = ex.get("label_name", "").strip() if isinstance(ex, dict) else ""
+            if label:
+                db.add_label_exemption(account_id, label)
 
     db.add_log("INFO", f"Config imported: {summary}")
     return jsonify({"ok": True, "summary": summary})
@@ -794,9 +796,8 @@ def api_generate_prompt_stream():
         if not description:
             yield "event: done\ndata: \n\n"
             return
-        stream = _llm.stream_generate_prompt_instruction(description)
         try:
-            for event in stream:
+            for event in _llm.stream_generate_prompt_instruction(description):
                 event_type = event.get("type", "content")
                 text = event.get("text", "")
                 lines = ["event: " + event_type] + [f"data: {line}" for line in text.split("\n")] + ["", ""]
@@ -806,8 +807,6 @@ def api_generate_prompt_stream():
             db.add_log("ERROR", f"Prompt generation failed: {e}")
             yield "event: error\ndata: Generation failed. Check Ollama is running.\n\n"
             yield "event: done\ndata: \n\n"
-        finally:
-            stream.close()
 
     return Response(generate(), content_type="text/event-stream")
 
