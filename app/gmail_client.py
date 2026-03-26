@@ -4,6 +4,8 @@ import json
 import os
 import time
 
+from bs4 import BeautifulSoup
+
 from cachetools import TTLCache
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -235,6 +237,12 @@ def _extract_body(payload) -> str:
                 data = part["body"].get("data", "")
                 if data:
                     return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+        for part in payload["parts"]:
+            if part["mimeType"] == "text/html":
+                data = part["body"].get("data", "")
+                if data:
+                    html = base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+                    return BeautifulSoup(html, "html.parser").get_text(separator="\n", strip=True)
         for part in payload["parts"]:
             result = _extract_body(part)
             if result:
