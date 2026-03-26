@@ -208,11 +208,15 @@ def trim_processed_emails(lookback_hours):
     ).execute()
 
 
-def trim_categorization_history():
+def _trim_by_timestamp(model, field):
     retention_days = int(get_setting("log_retention_days", str(LOG_RETENTION_DAYS)))
     if retention_days > 0:
         cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).strftime("%Y-%m-%d %H:%M:%S")
-        CategorizationHistory.delete().where(CategorizationHistory.timestamp < cutoff).execute()
+        model.delete().where(field < cutoff).execute()
+
+
+def trim_categorization_history():
+    _trim_by_timestamp(CategorizationHistory, CategorizationHistory.timestamp)
 
 
 # ---- Logs ----
@@ -223,10 +227,7 @@ def add_log(level, message):
 
 
 def trim_logs():
-    retention_days = int(get_setting("log_retention_days", str(LOG_RETENTION_DAYS)))
-    if retention_days > 0:
-        cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).strftime("%Y-%m-%d %H:%M:%S")
-        Log.delete().where(Log.timestamp < cutoff).execute()
+    _trim_by_timestamp(Log, Log.timestamp)
 
 
 def count_active_prompts():

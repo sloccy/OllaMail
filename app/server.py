@@ -47,9 +47,9 @@ def _check_origin():
 def _fmt_interval(secs):
     secs = int(secs)
     if secs >= 3600:
-        return f"{round(secs / 3600)}h"
+        return f"{secs // 3600}h"
     if secs >= 60:
-        return f"{round(secs / 60)}m"
+        return f"{secs // 60}m"
     return f"{secs}s"
 
 
@@ -359,14 +359,29 @@ def api_import_config():
         account_id = email_to_id.get(email)
         if not account_id:
             continue
-        if ret.get("global_days") is not None and not db.has_global_retention(account_id):
-            db.set_global_retention(account_id, ret["global_days"])
-            summary["retention"]["added"] += 1
-        elif ret.get("global_days") is not None:
-            summary["retention"]["skipped"] += 1
+        global_days = ret.get("global_days")
+        if global_days is not None:
+            try:
+                global_days = int(global_days)
+            except (ValueError, TypeError):
+                global_days = None
+        if global_days is not None and global_days >= 1:
+            if not db.has_global_retention(account_id):
+                db.set_global_retention(account_id, global_days)
+                summary["retention"]["added"] += 1
+            else:
+                summary["retention"]["skipped"] += 1
         for lr in ret.get("label_rules", []):
+            try:
+                days = int(lr["days"])
+            except (ValueError, TypeError, KeyError):
+                summary["retention"]["skipped"] += 1
+                continue
+            if days < 1:
+                summary["retention"]["skipped"] += 1
+                continue
             if not db.label_retention_exists(account_id, lr["label_name"]):
-                db.add_label_retention(account_id, lr["label_name"], lr["days"])
+                db.add_label_retention(account_id, lr["label_name"], days)
                 summary["retention"]["added"] += 1
             else:
                 summary["retention"]["skipped"] += 1
@@ -478,6 +493,12 @@ def frag_update_prompt(prompt_id):
     name = f.get("name", "").strip()
     instructions = f.get("instructions", "").strip()
     label_name = f.get("label_name", "").strip()
+    if not name or not instructions or not label_name:
+        return fragment_response(
+            "fragments/prompts_list.html",
+            _prompt_list_context(),
+            toast={"message": "name, instructions, and label_name are required", "type": "error"},
+        )
     active = int(f.get("active", 1))
     actions = _parse_prompt_actions(f)
     db.update_prompt(prompt_id, name, instructions, label_name, active, **actions)
