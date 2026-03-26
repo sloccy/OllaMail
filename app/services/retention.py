@@ -9,8 +9,7 @@ def cleanup_retention(account: dict, service) -> None:
         retention = db.get_retention(account_id)
         trashed_ids = set()
 
-        exempt_names = {e["label_name"] for e in retention.get("exemptions", [])}
-        exempt_lower = {n.lower() for n in exempt_names}
+        exempt_lower = {e["label_name"].lower() for e in retention.get("exemptions", [])}
 
         for rule in retention["labels"]:
             if rule["label_name"].lower() in exempt_lower:

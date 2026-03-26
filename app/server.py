@@ -185,7 +185,10 @@ def api_reorder_prompts():
     ordered_ids = data.get("ordered_ids", [])
     if not ordered_ids:
         return jsonify({"error": "ordered_ids required"}), 400
-    db.reorder_prompts([int(i) for i in ordered_ids])
+    try:
+        db.reorder_prompts([int(i) for i in ordered_ids])
+    except (ValueError, TypeError):
+        return jsonify({"error": "ordered_ids must be integers."}), 400
     return jsonify({"ok": True})
 
 
@@ -213,7 +216,7 @@ def api_export_prompts():
     ]
     export_data = [{k: p[k] for k in export_fields if k in p} for p in prompts]
 
-    accounts = {a["id"]: a["email"] for a in db.list_accounts_safe()}
+    accounts = _account_map()
     for p in export_data:
         aid = p.get("account_id")
         p["account"] = accounts.get(aid, "all accounts") if aid else "all accounts"
@@ -554,10 +557,15 @@ def frag_history():
     prompt_id = request.args.get("prompt_id", "")
     subject = request.args.get("subject", "").strip()
     sender = request.args.get("sender", "").strip()
-    limit = min(int(request.args.get("limit", 200)), HISTORY_MAX_LIMIT)
+    try:
+        limit = min(int(request.args.get("limit", 200)), HISTORY_MAX_LIMIT)
+        account_id = int(account_id) if account_id else None
+        prompt_id = int(prompt_id) if prompt_id else None
+    except ValueError:
+        return _htmx_toast("Invalid filter parameters.")
     rows = db.get_categorization_history(
-        account_id=int(account_id) if account_id else None,
-        prompt_id=int(prompt_id) if prompt_id else None,
+        account_id=account_id,
+        prompt_id=prompt_id,
         subject=subject or None,
         sender=sender or None,
         limit=limit,
@@ -650,7 +658,7 @@ def frag_add_label_retention(account_id):
 
 @app.route("/fragments/retention/<int:account_id>/labels/<int:rule_id>", methods=["DELETE"])
 def frag_delete_label_retention(account_id, rule_id):
-    db.delete_label_retention(rule_id)
+    db.delete_label_retention(rule_id, account_id)
     return _retention_panel(account_id, toast="Rule removed.")
 
 
@@ -660,14 +668,15 @@ def frag_add_exemption(account_id):
     if err:
         return err
     label_name = (request.form.get("label_name") or "").strip()
-    if label_name:
-        db.add_label_exemption(account_id, label_name)
+    if not label_name:
+        return _retention_panel(account_id, account, toast={"message": "Label name is required.", "type": "error"})
+    db.add_label_exemption(account_id, label_name)
     return _retention_panel(account_id, account, toast=f'"{label_name}" will never be deleted.')
 
 
 @app.route("/fragments/retention/<int:account_id>/exemptions/<int:exemption_id>", methods=["DELETE"])
 def frag_delete_exemption(account_id, exemption_id):
-    db.delete_label_exemption(exemption_id)
+    db.delete_label_exemption(exemption_id, account_id)
     return _retention_panel(account_id, toast="Exemption removed.")
 
 
@@ -747,7 +756,10 @@ def frag_retention_query():
     account_id = request.args.get("account_id", "").strip()
     if not account_id:
         return Response("", content_type="text/html")
-    account_id = int(account_id)
+    try:
+        account_id = int(account_id)
+    except ValueError:
+        return Response("", content_type="text/html")
     if not db.get_account(account_id):
         return Response("", content_type="text/html")
     return _retention_panel(account_id)

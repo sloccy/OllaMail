@@ -79,12 +79,7 @@ No explanation, no markdown, just the JSON object."""
             )
             raw = response.message.content.strip()
 
-            if raw.startswith("```"):
-                parts = raw.split("```")
-                raw = parts[1] if len(parts) > 1 else raw
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                raw = raw.strip()
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw).strip()
 
             try:
                 result = json.loads(raw)
