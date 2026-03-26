@@ -78,9 +78,9 @@ def get_service(credentials_json: str):
     """Load and refresh credentials. Returns (service, refreshed_json_or_None)."""
     creds = Credentials.from_authorized_user_info(json.loads(credentials_json), SCOPES)
     refreshed = None
-    if creds.expired:
+    if not creds.valid:
         if not creds.refresh_token:
-            raise ValueError("Credentials are expired and no refresh token is available. Please reconnect the account.")
+            raise ValueError("Credentials are invalid and no refresh token is available. Please reconnect the account.")
         creds.refresh(Request())
         refreshed = creds.to_json()
     if not creds.refresh_token:
@@ -241,10 +241,15 @@ def batch_modify_emails(service, modifications: list) -> None:
             service.users().messages().batchModify(userId="me", body=body).execute()
 
 
+@_gmail_retry
 def batch_trash_emails(service, message_ids: list) -> int:
     if not message_ids:
         return 0
-    batch_modify_emails(service, [(mid, ["TRASH"], ["INBOX"]) for mid in message_ids])
+    for i in range(0, len(message_ids), 1000):
+        service.users().messages().batchModify(
+            userId="me",
+            body={"ids": message_ids[i : i + 1000], "addLabelIds": [LABEL_TRASH], "removeLabelIds": [LABEL_INBOX]},
+        ).execute()
     return len(message_ids)
 
 
