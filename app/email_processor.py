@@ -1,7 +1,7 @@
 from app import db, gmail_client, llm
 from app.config import GMAIL_LOOKBACK_HOURS, GMAIL_MAX_RESULTS
-from app.llm import LLMError
 from app.gmail_client import LABEL_INBOX, LABEL_SPAM, LABEL_UNREAD
+from app.llm import LLMError
 from app.models import CategorizationHistory, Log, ProcessedEmail, database
 
 
