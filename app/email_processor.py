@@ -51,7 +51,10 @@ def _process_email(email: dict, account_id: int, email_addr: str, prompts: list,
     modifies = []
     trashes = []
     try:
-        db.add_log("INFO", f"[{email_addr}] Classifying: '{email.get('subject', '?')[:60]}' from {email.get('sender', '?')[:60]}")
+        db.add_log(
+            "INFO",
+            f"[{email_addr}] Classifying: '{email.get('subject', '?')[:60]}' from {email.get('sender', '?')[:60]}",
+        )
         email_results = llm.classify_email_batch(email, prompts)
         matched = [p["name"] for p in prompts if email_results.get(p["id"])]
         db.add_log("INFO", f"[{email_addr}] Classification done: {len(matched)} match(es): {matched or 'none'}")
