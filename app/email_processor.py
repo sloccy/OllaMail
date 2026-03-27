@@ -126,7 +126,9 @@ def _process_email(email: dict, account_id: int, email_addr: str, prompts: list,
                 CategorizationHistory.insert_many(pending_cats).execute()
             ProcessedEmail.insert(account_id=account_id, message_id=email["id"]).on_conflict_ignore().execute()
     except LLMError as e:
-        db.add_log("WARNING", f"[{email_addr}] LLM failure for '{email.get('subject', '?')[:60]}': {e} — will retry next scan")
+        db.add_log(
+            "WARNING", f"[{email_addr}] LLM failure for '{email.get('subject', '?')[:60]}': {e} — will retry next scan"
+        )
         return [], []
     except Exception as e:
         db.add_log("ERROR", f"[{email_addr}] Error processing email '{email.get('subject', '?')[:60]}': {e}")
