@@ -163,6 +163,7 @@ def stream_generate_prompt_instruction(description: str):
             },
         ],
         stream=True,
+        think=False,
         options={
             "temperature": 0.7,
             "num_predict": OLLAMA_GENERATE_NUM_PREDICT,
