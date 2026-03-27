@@ -777,7 +777,13 @@ def frag_retention_query():
 def api_generate_prompt_stream():
     description = request.args.get("description", "").strip()
 
+    # 2KB padding comment forces Waitress to flush its output buffer immediately.
+    # Without this, Waitress holds small SSE events (50-100 bytes each) until its
+    # 18000-byte send_bytes threshold is reached, so nothing reaches the browser.
+    _SSE_FLUSH_PAD = ": " + " " * 2048 + "\n\n"
+
     def generate():
+        yield _SSE_FLUSH_PAD
         if not description:
             yield "event: done\ndata: \n\n"
             return
@@ -788,10 +794,9 @@ def api_generate_prompt_stream():
                 event_type = event.get("type", "content")
                 text = event.get("text", "")
                 lines = ["event: " + event_type] + [f"data: {line}" for line in text.split("\n")] + ["", ""]
-                chunk = "\n".join(lines)
+                chunk = "\n".join(lines) + _SSE_FLUSH_PAD
                 event_count += 1
-                if event_count <= 3:
-                    _logger.info("SSE chunk #%d: type=%s len=%d", event_count, event_type, len(text))
+                _logger.info("SSE chunk #%d: type=%s len=%d", event_count, event_type, len(text))
                 yield chunk
             db.add_log("INFO", f"Prompt generation completed. Sent {event_count} SSE events.")
             yield "event: done\ndata: \n\n"
@@ -800,7 +805,9 @@ def api_generate_prompt_stream():
             yield "event: error\ndata: Generation failed. Check Ollama is running.\n\n"
             yield "event: done\ndata: \n\n"
 
-    return Response(generate(), content_type="text/event-stream")
+    return Response(
+        generate(), content_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 
 # ---- Startup ----
