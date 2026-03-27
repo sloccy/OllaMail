@@ -17,6 +17,9 @@ from app.config import (
 _logger = logging.getLogger("ollamail.llm")
 _client = _ollama.Client(host=OLLAMA_HOST, timeout=OLLAMA_TIMEOUT)
 
+# Safety net: strip <think> tags in case some ollama versions embed them in content
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
 
 class LLMError(Exception):
     """Raised when the LLM fails to produce a usable classification."""
@@ -55,6 +58,7 @@ Respond with ONLY a JSON object where each key is the rule's number (1, 2, 3...)
 Example: {{{example}}}
 No explanation, no markdown, just the JSON object."""
 
+    db.add_log("INFO", f"LLM classifying '{email.get('subject', '?')[:60]}' against {len(prompts)} rule(s)")
     try:
         response = _client.chat(
             model=OLLAMA_MODEL,
@@ -73,7 +77,18 @@ No explanation, no markdown, just the JSON object."""
                 "num_ctx": OLLAMA_NUM_CTX,
             },
         )
-        raw = response.message.content.strip()
+        raw = response.message.content or ""
+        thinking = getattr(response.message, "thinking", None) or ""
+        db.add_log("INFO", f"LLM classify response: content={len(raw)} chars, thinking={len(thinking)} chars")
+        if raw:
+            db.add_log("INFO", f"LLM raw content: {raw[:500]}")
+        if thinking:
+            db.add_log("INFO", f"LLM thinking (first 200): {thinking[:200]}")
+        # If think=False didn't suppress thinking and content is empty, fall back to thinking field
+        if not raw.strip() and thinking.strip():
+            db.add_log("WARNING", "LLM returned empty content with think=False — falling back to thinking field")
+            raw = thinking
+        raw = _THINK_RE.sub("", raw).strip()
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw).strip()
         result = json.loads(raw)
         parsed = {}
@@ -155,13 +170,13 @@ def stream_generate_prompt_instruction(description: str):
         },
     ):
         thinking = getattr(chunk.message, "thinking", None)
-        content = chunk.message.content
+        content = chunk.message.content or ""
 
         # Ollama library natively separates thinking from content
-        if thinking:
+        if thinking is not None and thinking != "":
             has_native_thinking = True
             yield {"type": "think", "text": thinking}
-            continue
+            # Don't continue — content on the same chunk should also be processed
         if content:
             if has_native_thinking:
                 yield {"type": "content", "text": content}
