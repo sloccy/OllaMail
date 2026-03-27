@@ -13,7 +13,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1/Sortable.min.js" defer></script>
   <script src="https://unpkg.com/htmx.org@2" defer></script>
-  <script src="https://unpkg.com/htmx-ext-sse@2/sse.js" defer></script>
 </head>
 <body>
 <div class="layout">
@@ -202,15 +201,15 @@
 
         <div id="builder-result" style="display:none;margin-top:28px;">
           <hr>
-          <div id="builder-sse-container" hx-ext="sse" sse-close="done">
+          <div id="builder-sse-container">
             <div class="mb-4">
               <div class="font-monospace text-muted mb-2" style="font-size:11px;letter-spacing:0.05em;">&#9670; THINKING</div>
-              <div id="builder-thinking" sse-swap="think" hx-swap="beforeend"
+              <div id="builder-thinking"
                 class="builder-thinking bg-base-300 border rounded p-3 font-monospace text-muted"></div>
             </div>
             <h6 class="section-title">Generated instruction</h6>
             <div class="mb-3">
-              <textarea class="form-control" id="builder-instruction" sse-swap="content" hx-swap="beforeend" style="min-height:6rem"></textarea>
+              <textarea class="form-control" id="builder-instruction" style="min-height:6rem"></textarea>
               <div class="form-text">Edit if needed, then send it to the Prompts page.</div>
             </div>
           </div>
