@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 from peewee import SQL, fn
@@ -222,7 +223,12 @@ def trim_categorization_history():
 # ---- Logs ----
 
 
+_logger = logging.getLogger("ollamail")
+
+
 def add_log(level, message):
+    log_level = getattr(logging, level.upper(), logging.INFO)
+    _logger.log(log_level, message)
     Log.create(level=level.upper(), message=message)
 
 
