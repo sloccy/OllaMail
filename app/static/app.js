@@ -102,6 +102,16 @@ document.getElementById('prompts-list').addEventListener('htmx:afterSwap', funct
 });
 
 // ---- Builder SSE ----
+let _builderEs = null;
+
+function _builderDone() {
+  clearTimeout(_builderEs && _builderEs._timeout);
+  if (_builderEs) { _builderEs.close(); _builderEs = null; }
+  const btn = document.getElementById('btn-generate');
+  btn.disabled = false; btn.textContent = '◆ Generate Instruction'; btn.classList.remove('btn-generating');
+  document.getElementById('btn-use-prompt').disabled = false;
+}
+
 function generatePrompt() {
   const desc = document.getElementById('builder-description').value.trim();
   if (!desc) { toast('Describe the emails first.', 'error'); return; }
@@ -110,27 +120,32 @@ function generatePrompt() {
   document.getElementById('builder-result').style.display = 'block';
   document.getElementById('builder-thinking').textContent = '';
   document.getElementById('builder-instruction').value = '';
-  const container = document.getElementById('builder-sse-container');
-  container.setAttribute('sse-connect', '/api/prompts/generate-stream?description=' + encodeURIComponent(desc));
-  htmx.process(container);
-  container._genTimeout = setTimeout(() => {
-    const b = document.getElementById('btn-generate');
-    if (b.disabled) {
-      b.disabled = false; b.textContent = '◆ Generate Instruction'; b.classList.remove('btn-generating');
-      document.getElementById('btn-use-prompt').disabled = false;
-      toast('Generation timed out. Try again.', 'error');
-    }
+
+  if (_builderEs) { _builderEs.close(); }
+
+  const es = new EventSource('/api/prompts/generate-stream?description=' + encodeURIComponent(desc));
+  _builderEs = es;
+
+  es.addEventListener('think', function(e) {
+    document.getElementById('builder-thinking').textContent += e.data;
+  });
+  es.addEventListener('content', function(e) {
+    document.getElementById('builder-instruction').value += e.data;
+  });
+  es.addEventListener('done', function() { _builderDone(); });
+  es.addEventListener('error', function(e) {
+    if (e.data) toast('Generation failed: ' + e.data, 'error');
+    _builderDone();
+  });
+  es.onerror = function() {
+    if (es.readyState === EventSource.CLOSED) _builderDone();
+  };
+
+  es._timeout = setTimeout(() => {
+    toast('Generation timed out. Try again.', 'error');
+    _builderDone();
   }, 120000);
 }
-
-document.body.addEventListener('htmx:sseClose', function(e) {
-  if (e.detail && e.detail.elt && e.detail.elt.id === 'builder-sse-container') {
-    clearTimeout(e.detail.elt._genTimeout);
-    const btn = document.getElementById('btn-generate');
-    btn.disabled = false; btn.textContent = '◆ Generate Instruction'; btn.classList.remove('btn-generating');
-    document.getElementById('btn-use-prompt').disabled = false;
-  }
-});
 
 function useBuilderInstruction() {
   const instruction = document.getElementById('builder-instruction').value.trim();
