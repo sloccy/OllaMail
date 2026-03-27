@@ -126,11 +126,23 @@ function generatePrompt() {
   const es = new EventSource('/api/prompts/generate-stream?description=' + encodeURIComponent(desc));
   _builderEs = es;
 
+  // Reset timeout on each event — fires only after 2 min of inactivity, not 2 min total.
+  function resetTimeout() {
+    clearTimeout(es._timeout);
+    es._timeout = setTimeout(() => {
+      toast('Generation timed out (no activity for 2 minutes). Try again.', 'error');
+      _builderDone();
+    }, 120000);
+  }
+  resetTimeout();
+
   es.addEventListener('think', function(e) {
     document.getElementById('builder-thinking').textContent += e.data;
+    resetTimeout();
   });
   es.addEventListener('content', function(e) {
     document.getElementById('builder-instruction').value += e.data;
+    resetTimeout();
   });
   es.addEventListener('done', function() { _builderDone(); });
   es.addEventListener('error', function(e) {
@@ -140,11 +152,6 @@ function generatePrompt() {
   es.onerror = function() {
     if (es.readyState === EventSource.CLOSED) _builderDone();
   };
-
-  es._timeout = setTimeout(() => {
-    toast('Generation timed out. Try again.', 'error');
-    _builderDone();
-  }, 120000);
 }
 
 function useBuilderInstruction() {
