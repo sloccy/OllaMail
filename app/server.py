@@ -779,11 +779,13 @@ def api_generate_prompt_stream():
             yield "event: done\ndata: \n\n"
             return
         try:
+            db.add_log("INFO", f"Prompt generation starting for: {description[:80]}")
             for event in llm.stream_generate_prompt_instruction(description):
                 event_type = event.get("type", "content")
                 text = event.get("text", "")
                 lines = ["event: " + event_type] + [f"data: {line}" for line in text.split("\n")] + ["", ""]
                 yield "\n".join(lines)
+            db.add_log("INFO", "Prompt generation completed.")
             yield "event: done\ndata: \n\n"
         except Exception as e:
             db.add_log("ERROR", f"Prompt generation failed: {e}")
