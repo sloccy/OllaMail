@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
 
 from flask import Flask, Response, jsonify, make_response, render_template, request, session
+from markupsafe import Markup
 from flask_compress import Compress
 
 from app import db, gmail_client, llm, poller
@@ -59,7 +60,18 @@ def _fmt_retention(days):
     return f"{days} {'day' if days == 1 else 'days'}"
 
 
+def _fmt_date_stacked(ts):
+    if not ts:
+        return Markup("—")
+    try:
+        d = datetime.fromisoformat(ts)
+        return Markup(f"{d.day} {d.strftime('%b')}<br><span class='text-muted'>{d.strftime('%H:%M')}</span>")
+    except Exception:
+        return Markup(str(ts))
+
+
 app.jinja_env.filters["fmtdate"] = _fmt_date
+app.jinja_env.filters["fmtdate_stacked"] = _fmt_date_stacked
 app.jinja_env.filters["fmtinterval"] = _fmt_interval
 app.jinja_env.filters["fmtretention"] = _fmt_retention
 
