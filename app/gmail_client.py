@@ -152,8 +152,10 @@ def list_labels(service) -> list:
     )
 
 
-def fetch_emails_older_than(service, days: int, label_name: str = None, excluded_labels: list = None) -> list:
-    cutoff = datetime.date.today() - datetime.timedelta(days=days)
+def fetch_emails_older_than(
+    service, days: int, label_name: str | None = None, excluded_labels: list | None = None
+) -> list:
+    cutoff = datetime.datetime.now(datetime.UTC).date() - datetime.timedelta(days=days)
     query = f"before:{cutoff.strftime('%Y/%m/%d')}"
     if label_name:
         query += f' label:"{label_name}"'
