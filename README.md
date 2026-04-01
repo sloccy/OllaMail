@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="app/static/logo.png" alt="OllaMail logo" width="120" />
+  <img src="app/static/logo.webp" alt="OllaMail logo" width="120" />
   <h1>OllaMail</h1>
   <p><strong>Local LLM email labeling for Gmail — fully self-hosted, no data leaves your machine.</strong></p>
   <img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker" />
@@ -25,7 +25,8 @@ OllaMail connects to your Gmail accounts via OAuth, fetches recent emails on a s
 - **Web UI** — manage accounts, rules, retention, settings, and logs from a browser
 - **Auto-label creation** — labels are created in Gmail automatically if they don't exist
 - **Email retention management** — set per-label or global retention rules that auto-trash old emails; add label exemptions to protect important labels
-- **Categorization history** — searchable and filterable log of every labeling decision; CSV export
+- **Categorization history** — searchable and filterable log of every labeling decision
+- **Log export** — download processing logs as CSV
 - **Config import/export** — full backup and restore of accounts, rules, settings, and retention as JSON
 - **Deduplication** — each email is evaluated once per account and never reprocessed
 - **Configurable polling** — set the interval in the UI; adjust lookback window and batch size via env vars
@@ -51,9 +52,8 @@ OllaMail connects to your Gmail accounts via OAuth, fetches recent emails on a s
 4. Choose **Web application** as the application type.
 5. Under **Authorized redirect URIs**, add:
    ```
-   http://localhost:5001/oauth/callback
+   http://localhost
    ```
-   Replace `localhost:5001` with your actual host/port if accessing from another device (e.g. your Pi's LAN IP).
 6. Click **Create**, then download the JSON file.
 7. Save it as `credentials/credentials.json` in your project directory.
 8. Go to **APIs & Services → OAuth consent screen** and add your Gmail address(es) as **Test users**.
@@ -111,7 +111,6 @@ services:
       - OLLAMA_MODEL=llama3.2
       - DATA_DIR=/data
       - CREDENTIALS_FILE=/credentials/credentials.json
-      - BASE_URL=http://localhost:5001
       # Optional overrides — see Configuration Reference below
       # - GMAIL_LOOKBACK_HOURS=24
       # - GMAIL_MAX_RESULTS=50
@@ -128,8 +127,6 @@ volumes:
 networks:
   internal:
 ```
-
-Set `BASE_URL` to match the redirect URI you registered in Google Cloud (e.g., `http://localhost:5001`).
 
 ---
 
@@ -156,9 +153,10 @@ Navigate to **http://localhost:5001** (or your configured `BASE_URL`).
 | **Dashboard** | Poller status, processing stats, and recent activity |
 | **Accounts** | Add Gmail accounts via OAuth |
 | **Prompts** | Define labeling rules in plain English |
-| **History** | Searchable log of every labeling decision; CSV export |
+| **Builder** | AI prompt builder — describe what to catch and let the LLM write the classifier |
+| **History** | Searchable log of every labeling decision |
 | **Settings** | Set poll interval and other runtime options |
-| **Logs** | View per-account processing history |
+| **Logs** | View per-account processing history; CSV export |
 | **Retention** | Configure per-label and global email retention rules |
 
 ---
@@ -175,11 +173,13 @@ cd OllaMail
 # Install dependencies
 pip install -r requirements.txt
 
+# Build frontend assets
+npm install && npm run build
+
 # Set required environment variables
 export OLLAMA_HOST=http://localhost:11434
 export DATA_DIR=./data
 export CREDENTIALS_FILE=./credentials/credentials.json
-export BASE_URL=http://localhost:5000
 
 # Run the app
 python -c "from app.server import create_app; create_app().run(host='0.0.0.0', port=5000, debug=True)"
@@ -203,7 +203,6 @@ All settings are controlled via environment variables.
 | `OLLAMA_MODEL` | `llama3.2` | Model to use for classification |
 | `OLLAMA_TIMEOUT` | `600` | Seconds to wait for Ollama to respond or pull a model |
 | `OLLAMA_NUM_CTX` | `4096` | LLM context window size in tokens |
-| `OLLAMA_NUM_PREDICT` | `200` | Max tokens for classification responses (small JSON, 200 is plenty) |
 | `OLLAMA_GENERATE_NUM_PREDICT` | `4096` | Max tokens for longer generation tasks (e.g. AI prompt builder) |
 | `GMAIL_MAX_RESULTS` | `50` | Emails fetched per inbox scan (only unprocessed ones are classified) |
 | `GMAIL_LOOKBACK_HOURS` | `24` | How far back to look for emails on each scan |
@@ -213,6 +212,8 @@ All settings are controlled via environment variables.
 | `MIN_POLL_INTERVAL` | `30` | Minimum allowed poll interval in seconds |
 | `HISTORY_MAX_LIMIT` | `500` | Maximum rows returned in history/log queries |
 | `DEBUG_LOGGING` | `0` | Set to `1` to enable verbose debug logging |
+| `DATA_DIR` | `/data` | Directory where the SQLite database is stored |
+| `CREDENTIALS_FILE` | `/credentials/credentials.json` | Path to the Google OAuth client credentials JSON |
 
 ---
 
@@ -263,7 +264,7 @@ All settings are controlled via environment variables.
 | Backend | Python 3.14 / Flask 3 |
 | WSGI server | Waitress |
 | UI | Bootstrap 5.3 (dark mode) + HTMX 2.0 |
-| Database | SQLite (raw SQL, no ORM) |
+| Database | SQLite via Peewee ORM |
 | LLM runtime | Ollama |
 | Gmail integration | Google OAuth 2.0 + Gmail API |
 | Deployment | Docker / Docker Compose |
