@@ -1,8 +1,6 @@
 .git
 *.md
 node_modules
-package.json
-package-lock.json
 docker-compose.yml
 docker-compose*.yml
 __pycache__
