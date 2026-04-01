@@ -6,25 +6,29 @@
     <td class="col-subject">{{ (r.subject or '(no subject)')|e }}</td>
     <td class="col-sender text-muted" title="{{ (r.sender or '')|e }}">{{ (r.sender or '—')|e }}</td>
     <td class="col-rule" title="{{ (r.prompt_name or '')|e }}">
-      {{ (r.prompt_name or '—')|e }}
-      {% if r.label_name %}
-        <span class="badge border border-primary text-primary font-monospace">{{ r.label_name|e }}</span>
-      {% else %}
-        <span class="badge text-bg-secondary">no match</span>
-      {% endif %}
+      <div class="d-flex flex-column align-items-start gap-1">
+        {% if r.prompt_name %}<span>{{ r.prompt_name|e }}</span>{% endif %}
+        {% if r.label_name %}
+          <span class="badge border border-primary text-primary font-monospace">{{ r.label_name|e }}</span>
+        {% else %}
+          <span class="badge text-bg-secondary">no match</span>
+        {% endif %}
+      </div>
     </td>
     <td class="col-actions">
-      {% if r.extra_actions %}
-        {% for a in r.extra_actions %}<span class="badge text-bg-info">{{ a|e }}</span>{% endfor %}
-      {% else %}
-        <span class="text-muted">—</span>
-      {% endif %}
-      {% if r.llm_response %}
-      <details class="d-inline-block ms-1">
-        <summary class="text-muted" style="cursor:pointer;font-size:.75rem;list-style:none;">LLM</summary>
-        <pre class="mt-1 p-1 border rounded bg-body-secondary font-monospace" style="font-size:.7rem;max-width:100%;white-space:pre-wrap;word-break:break-all;">{{ r.llm_response|e }}</pre>
-      </details>
-      {% endif %}
+      <div class="d-flex flex-column align-items-start gap-1">
+        {% if r.extra_actions %}
+          {% for a in r.extra_actions %}<span class="badge text-bg-info">{{ a|e }}</span>{% endfor %}
+        {% else %}
+          <span class="badge text-bg-secondary">no match</span>
+        {% endif %}
+        {% if r.llm_response %}
+        <details>
+          <summary class="text-muted" style="cursor:pointer;font-size:.75rem;list-style:none;">LLM</summary>
+          <pre class="mt-1 p-1 border rounded bg-body-secondary font-monospace" style="font-size:.7rem;max-width:100%;white-space:pre-wrap;word-break:break-all;">{{ r.llm_response|e }}</pre>
+        </details>
+        {% endif %}
+      </div>
     </td>
   </tr>
   {% endfor %}
