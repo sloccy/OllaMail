@@ -9,6 +9,8 @@ from html.parser import HTMLParser
 from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from app import db
 from app.config import EMAIL_BODY_TRUNCATION, GMAIL_LOOKBACK_HOURS, GMAIL_MAX_RESULTS
@@ -29,6 +31,24 @@ LABEL_TRASH = "TRASH"
 
 _GMAIL_API = "https://gmail.googleapis.com/gmail/v1"
 _OAUTH2_API = "https://www.googleapis.com/oauth2/v2"
+
+
+def _mount_retry_adapter(session: AuthorizedSession) -> None:
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=0,
+        status=3,
+        backoff_factor=1,
+        backoff_jitter=0.5,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=frozenset(["GET", "POST"]),
+        raise_on_status=False,
+        respect_retry_after_header=True,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -80,6 +100,7 @@ def exchange_code(state: str, code: str) -> tuple[str, str]:
 
 def _get_email(creds: Credentials) -> str:
     session = AuthorizedSession(creds)
+    _mount_retry_adapter(session)
     resp = session.get(f"{_OAUTH2_API}/userinfo")
     resp.raise_for_status()
     return resp.json()["email"]
@@ -92,7 +113,9 @@ def get_session(account: dict) -> AuthorizedSession:
             raise ValueError("Credentials are invalid and no refresh token is available. Please reconnect the account.")
         creds.refresh(Request())
         db.update_account_credentials(account["id"], creds.to_json())
-    return AuthorizedSession(creds)
+    session = AuthorizedSession(creds)
+    _mount_retry_adapter(session)
+    return session
 
 
 def build_label_cache(session, label_names: list) -> dict:
@@ -149,6 +172,7 @@ def iter_message_details(session, message_ids: list):
 
         def _fetch_one(msg_id):
             s = AuthorizedSession(session.credentials)
+            _mount_retry_adapter(s)
             resp = s.get(f"{_GMAIL_API}/users/me/messages/{msg_id}", params={"format": "full"})
             resp.raise_for_status()
             return resp.json()
