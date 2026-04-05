@@ -135,10 +135,13 @@ def stream_generate_prompt_instruction(description: str):
         stream=True,
         think=True,
         options={
-            "temperature": 0.5,
-            "num_predict": 1024,
+            "temperature": 0.3,
+            "num_predict": 4096,
             "num_ctx": OLLAMA_NUM_CTX,
-            "repeat_penalty": 1.5,
+            "repeat_penalty": 2.0,
+            "repeat_last_n": 256,
+            "top_p": 0.8,
+            "top_k": 30,
         },
     ):
         thinking = getattr(chunk.message, "thinking", None)
