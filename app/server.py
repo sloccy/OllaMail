@@ -185,8 +185,8 @@ def _ensure_label_for_accounts(account_id, label_name):
             if not account:
                 continue
             try:
-                service = gmail_client.get_session(account)
-                gmail_client.build_label_cache(service, [label_name])
+                session = gmail_client.get_session(account)
+                gmail_client.build_label_cache(session, [label_name])
             except Exception as e:
                 db.add_log("WARNING", f"Could not pre-create label '{label_name}' for account {account.get('id')}: {e}")
 
@@ -631,14 +631,14 @@ def frag_history_filters():
     return fragment_response("fragments/history_filters.html", {"accounts": accounts, "prompts": prompts})
 
 
-def _retention_panel(account_id, account=None, service=None, toast=None):
+def _retention_panel(account_id, account=None, session=None, toast=None):
     if account is None:
         account = db.get_account(account_id)
     retention = db.get_retention(account_id)
     gmail_labels = []
     if account:
         try:
-            svc = service or gmail_client.get_session(account)
+            svc = session or gmail_client.get_session(account)
             gmail_labels = gmail_client.list_labels(svc)
         except Exception:  # noqa: S110
             pass
@@ -654,12 +654,12 @@ def frag_retention(account_id):
     account, err = _get_account_or_404(account_id)
     if err:
         return err
-    service = None
+    session = None
     try:
-        service = gmail_client.get_session(account)
+        session = gmail_client.get_session(account)
     except Exception as e:
         db.add_log("WARNING", f"Could not refresh credentials for account {account_id}: {e}")
-    return _retention_panel(account_id, account, service=service)
+    return _retention_panel(account_id, account, session=session)
 
 
 @app.route("/fragments/retention/<int:account_id>", methods=["POST"])
