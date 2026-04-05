@@ -414,15 +414,21 @@ def api_import_config():
 def api_download_logs():
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    logs = db.get_logs_range(start, end)
-    out = io.StringIO()
-    w = csv.writer(out)
-    w.writerow(["timestamp", "level", "message"])
-    for row in logs:
-        w.writerow([row["timestamp"], row["level"], row["message"]])
+
+    def generate():
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["timestamp", "level", "message"])
+        yield out.getvalue()
+        for row in db.get_logs_range(start, end):
+            out.seek(0)
+            out.truncate()
+            w.writerow([row["timestamp"], row["level"], row["message"]])
+            yield out.getvalue()
+
     filename = f"logs_{start[:10]}_{end[:10]}.csv"
     return Response(
-        out.getvalue(),
+        generate(),
         mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -816,6 +822,8 @@ def api_generate_prompt_stream():
     _SSE_FLUSH_PAD = ": " + " " * 2048 + "\n\n"
 
     def generate():
+        # First event includes the 2KB padding to force Waitress to flush its buffer.
+        # Subsequent events don't need it — Waitress flushes once the threshold is crossed.
         yield _SSE_FLUSH_PAD
         if not description:
             yield "event: done\ndata: \n\n"
@@ -827,7 +835,7 @@ def api_generate_prompt_stream():
                 event_type = event.get("type", "content")
                 text = event.get("text", "")
                 lines = ["event: " + event_type] + [f"data: {line}" for line in text.split("\n")] + ["", ""]
-                chunk = "\n".join(lines) + _SSE_FLUSH_PAD
+                chunk = "\n".join(lines) + "\n\n"
                 event_count += 1
                 _logger.info("SSE chunk #%d: type=%s len=%d", event_count, event_type, len(text))
                 yield chunk

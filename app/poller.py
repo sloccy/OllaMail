@@ -67,7 +67,7 @@ def _run_scan() -> None:
             db.trim_categorization_history()
             _last_cleanup = now
 
-        accounts = [a for a in db.list_accounts() if a["active"]]
+        accounts = [a for a in db.list_accounts_safe() if a["active"]]
         if not accounts:
             db.add_log("INFO", "Poller ran: no active accounts configured.")
             return

@@ -115,11 +115,15 @@ def build_label_cache(service, label_names: list) -> dict:
     return cache
 
 
-def _paginate_message_ids(service, request) -> list:
+def _paginate_message_ids(service, request, max_pages: int = 0) -> list:
     ids = []
+    pages = 0
     while request is not None:
         response = request.execute()
         ids.extend(m["id"] for m in response.get("messages", []))
+        pages += 1
+        if max_pages and pages >= max_pages:
+            break
         request = service.users().messages().list_next(request, response)
     return ids
 
@@ -132,43 +136,40 @@ def list_recent_message_ids(service, max_results=GMAIL_MAX_RESULTS, lookback_hou
     )
 
 
-def fetch_message_details(service, message_ids: list) -> list:
-    if not message_ids:
-        return []
-    results = {}
-
-    def _callback(request_id, response, exception):
-        if exception is None:
-            results[request_id] = response
-        else:
-            db.add_log("WARNING", f"Batch fetch failed for message {request_id}: {exception}")
-
+def iter_message_details(service, message_ids: list):
+    """Yield email dicts one at a time, fetching in batches of 100.
+    Frees each raw API response after yielding to minimise peak memory."""
     for i in range(0, len(message_ids), 100):
+        batch_ids = message_ids[i : i + 100]
+        results: dict = {}
+
+        def _callback(request_id, response, exception, _r=results):
+            if exception is None:
+                _r[request_id] = response
+            else:
+                db.add_log("WARNING", f"Batch fetch failed for message {request_id}: {exception}")
+
         batch = service.new_batch_http_request(callback=_callback)
-        for msg_id in message_ids[i : i + 100]:
+        for msg_id in batch_ids:
             batch.add(
                 service.users().messages().get(userId="me", id=msg_id, format="full"),
                 request_id=msg_id,
             )
         batch.execute()
 
-    emails = []
-    for msg_id in message_ids:
-        full = results.get(msg_id)
-        if not full:
-            continue
-        headers = {h["name"]: h["value"] for h in full["payload"]["headers"]}
-        body = _extract_body(full["payload"])
-        emails.append(
-            {
+        for msg_id in batch_ids:
+            full = results.pop(msg_id, None)
+            if not full:
+                continue
+            headers = {h["name"]: h["value"] for h in full["payload"]["headers"]}
+            body = _extract_body(full["payload"], EMAIL_BODY_TRUNCATION)
+            yield {
                 "id": msg_id,
                 "subject": headers.get("Subject", "(no subject)"),
                 "sender": headers.get("From", "unknown"),
                 "snippet": full.get("snippet", ""),
                 "body": body[:EMAIL_BODY_TRUNCATION],
             }
-        )
-    return emails
 
 
 def list_labels(service) -> list:
@@ -192,6 +193,7 @@ def fetch_emails_older_than(
     return _paginate_message_ids(
         service,
         service.users().messages().list(userId="me", q=query, maxResults=500),
+        max_pages=5,
     )
 
 
@@ -224,10 +226,26 @@ def batch_trash_emails(service, message_ids: list) -> int:
     return len(message_ids)
 
 
-def _extract_body(payload) -> str:
+def _b64_slice(data: str, max_chars: int) -> str:
+    """Slice a URL-safe base64 string to decode at most ~max_chars bytes, with correct padding."""
+    limit = max_chars * 4 // 3 + 4
+    data = data.rstrip("=")[:limit]
+    # A leftover of 1 char (mod 4) is always invalid base64; trim it to 0.
+    # Leftovers of 2 or 3 are valid partial groups — add the required padding.
+    if len(data) % 4 == 1:
+        data = data[:-1]
+    data += "=" * (-len(data) % 4)
+    return data
+
+
+def _extract_body(payload, max_chars: int = 0) -> str:
     if "parts" not in payload:
         data = payload.get("body", {}).get("data", "")
-        return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore") if data else ""
+        if not data:
+            return ""
+        if max_chars:
+            data = _b64_slice(data, max_chars)
+        return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
     # Single pass: collect plain/html data references (prefer plain, decode lazily)
     plain_data = html_data = ""
     for part in payload["parts"]:
@@ -236,13 +254,18 @@ def _extract_body(payload) -> str:
         elif part["mimeType"] == "text/html" and not html_data:
             html_data = part["body"].get("data", "")
     if plain_data:
+        if max_chars:
+            plain_data = _b64_slice(plain_data, max_chars)
         return base64.urlsafe_b64decode(plain_data).decode("utf-8", errors="ignore")
     if html_data:
+        if max_chars:
+            # HTML is tag-heavy; use a larger multiplier to preserve enough text after stripping
+            html_data = _b64_slice(html_data, max_chars * 10)
         html = base64.urlsafe_b64decode(html_data).decode("utf-8", errors="ignore")
         return _html_to_text(html)
     # Recurse into nested parts (e.g., multipart/alternative within multipart/mixed)
     for part in payload["parts"]:
-        result = _extract_body(part)
+        result = _extract_body(part, max_chars)
         if result:
             return result
     return ""

@@ -11,7 +11,9 @@ def process_account(account: dict, prompts: list):
     account_id = account["id"]
     email_addr = account["email"]
 
-    service = gmail_client.get_service_and_refresh(account)
+    # Load full account (with credentials) only when needed for this account
+    full_account = db.get_account(account_id)
+    service = gmail_client.get_service_and_refresh(full_account)
 
     all_ids = gmail_client.list_recent_message_ids(
         service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
@@ -23,8 +25,7 @@ def process_account(account: dict, prompts: list):
         db.update_last_scan(account_id)
         return service
 
-    new_emails = gmail_client.fetch_message_details(service, unprocessed_ids)
-    db.add_log("INFO", f"[{email_addr}] Processing {len(new_emails)} new email(s) against {len(prompts)} rule(s).")
+    db.add_log("INFO", f"[{email_addr}] Processing {len(unprocessed_ids)} new email(s) against {len(prompts)} rule(s).")
 
     unique_labels = list({p["label_name"] for p in prompts})
     label_cache = gmail_client.build_label_cache(service, unique_labels)
@@ -32,7 +33,7 @@ def process_account(account: dict, prompts: list):
     all_modifies = []
     all_trashes = []
 
-    for email in new_emails:
+    for email in gmail_client.iter_message_details(service, unprocessed_ids):
         modifies, trashes = _process_email(email, account_id, email_addr, prompts, label_cache)
         all_modifies.extend(modifies)
         all_trashes.extend(trashes)

@@ -249,7 +249,7 @@ def get_logs(limit=100):
 
 
 def get_logs_range(start, end):
-    return list(Log.select().where(Log.timestamp >= start, Log.timestamp <= end).order_by(Log.id.asc()).dicts())
+    return Log.select().where(Log.timestamp >= start, Log.timestamp <= end).order_by(Log.id.asc()).dicts().iterator()
 
 
 # ---- Categorization History ----
