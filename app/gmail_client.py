@@ -3,12 +3,12 @@ import datetime
 import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
 
 from app import db
 from app.config import EMAIL_BODY_TRUNCATION, GMAIL_LOOKBACK_HOURS, GMAIL_MAX_RESULTS
@@ -26,6 +26,9 @@ LABEL_SPAM = "SPAM"
 LABEL_INBOX = "INBOX"
 LABEL_UNREAD = "UNREAD"
 LABEL_TRASH = "TRASH"
+
+_GMAIL_API = "https://gmail.googleapis.com/gmail/v1"
+_OAUTH2_API = "https://www.googleapis.com/oauth2/v2"
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -76,23 +79,25 @@ def exchange_code(state: str, code: str) -> tuple[str, str]:
 
 
 def _get_email(creds: Credentials) -> str:
-    svc = build("oauth2", "v2", credentials=creds)
-    return svc.userinfo().get().execute()["email"]
+    session = AuthorizedSession(creds)
+    resp = session.get(f"{_OAUTH2_API}/userinfo")
+    resp.raise_for_status()
+    return resp.json()["email"]
 
 
-def get_service_and_refresh(account: dict):
+def get_session(account: dict) -> AuthorizedSession:
     creds = Credentials.from_authorized_user_info(json.loads(account["credentials_json"]), SCOPES)
     if not creds.valid:
         if not creds.refresh_token:
             raise ValueError("Credentials are invalid and no refresh token is available. Please reconnect the account.")
         creds.refresh(Request())
         db.update_account_credentials(account["id"], creds.to_json())
-    return build("gmail", "v1", credentials=creds)
+    return AuthorizedSession(creds)
 
 
-def build_label_cache(service, label_names: list) -> dict:
+def build_label_cache(session, label_names: list) -> dict:
     """Return {name: id} for the given label names, creating any that are missing."""
-    all_labels = list_labels(service)
+    all_labels = list_labels(session)
     existing = {lbl["name"].lower(): lbl["id"] for lbl in all_labels}
     cache = {}
     for name in label_names:
@@ -100,62 +105,61 @@ def build_label_cache(service, label_names: list) -> dict:
             cache[name] = existing[name.lower()]
         else:
             try:
-                created = (
-                    service.users()
-                    .labels()
-                    .create(
-                        userId="me",
-                        body={"name": name, "labelListVisibility": "labelShow", "messageListVisibility": "show"},
-                    )
-                    .execute()
+                resp = session.post(
+                    f"{_GMAIL_API}/users/me/labels",
+                    json={"name": name, "labelListVisibility": "labelShow", "messageListVisibility": "show"},
                 )
-                cache[name] = created["id"]
+                resp.raise_for_status()
+                cache[name] = resp.json()["id"]
             except Exception as e:
                 db.add_log("WARNING", f"Could not create label '{name}': {e}")
     return cache
 
 
-def _paginate_message_ids(service, request, max_pages: int = 0) -> list:
+def _paginate_message_ids(session, params: dict, max_pages: int = 0) -> list:
     ids = []
     pages = 0
-    while request is not None:
-        response = request.execute()
-        ids.extend(m["id"] for m in response.get("messages", []))
+    while True:
+        resp = session.get(f"{_GMAIL_API}/users/me/messages", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        ids.extend(m["id"] for m in data.get("messages", []))
         pages += 1
         if max_pages and pages >= max_pages:
             break
-        request = service.users().messages().list_next(request, response)
+        next_token = data.get("nextPageToken")
+        if not next_token:
+            break
+        params["pageToken"] = next_token
     return ids
 
 
-def list_recent_message_ids(service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS) -> list:
+def list_recent_message_ids(session, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS) -> list:
     after_ts = int(time.time() - lookback_hours * 3600)
-    return _paginate_message_ids(
-        service,
-        service.users().messages().list(userId="me", maxResults=max_results, q=f"in:inbox after:{after_ts}"),
-    )
+    return _paginate_message_ids(session, {"maxResults": max_results, "q": f"in:inbox after:{after_ts}"})
 
 
-def iter_message_details(service, message_ids: list):
-    """Yield email dicts one at a time, fetching in batches of 100.
+def iter_message_details(session, message_ids: list):
+    """Yield email dicts one at a time, fetching in batches of 100 via thread pool.
     Frees each raw API response after yielding to minimise peak memory."""
     for i in range(0, len(message_ids), 100):
         batch_ids = message_ids[i : i + 100]
         results: dict = {}
 
-        def _callback(request_id, response, exception, _r=results):
-            if exception is None:
-                _r[request_id] = response
-            else:
-                db.add_log("WARNING", f"Batch fetch failed for message {request_id}: {exception}")
+        def _fetch_one(msg_id):
+            resp = session.get(f"{_GMAIL_API}/users/me/messages/{msg_id}", params={"format": "full"})
+            resp.raise_for_status()
+            return msg_id, resp.json()
 
-        batch = service.new_batch_http_request(callback=_callback)
-        for msg_id in batch_ids:
-            batch.add(
-                service.users().messages().get(userId="me", id=msg_id, format="full"),
-                request_id=msg_id,
-            )
-        batch.execute()
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(_fetch_one, mid): mid for mid in batch_ids}
+            for future in as_completed(futures):
+                msg_id = futures[future]
+                try:
+                    _, data = future.result()
+                    results[msg_id] = data
+                except Exception as e:
+                    db.add_log("WARNING", f"Batch fetch failed for message {msg_id}: {e}")
 
         for msg_id in batch_ids:
             full = results.pop(msg_id, None)
@@ -172,8 +176,10 @@ def iter_message_details(service, message_ids: list):
             }
 
 
-def list_labels(service) -> list:
-    result = service.users().labels().list(userId="me").execute()
+def list_labels(session) -> list:
+    resp = session.get(f"{_GMAIL_API}/users/me/labels")
+    resp.raise_for_status()
+    result = resp.json()
     return sorted(
         [{"id": lbl["id"], "name": lbl["name"]} for lbl in result.get("labels", [])],
         key=lambda x: x["name"].lower(),
@@ -181,7 +187,7 @@ def list_labels(service) -> list:
 
 
 def fetch_emails_older_than(
-    service, days: int, label_name: str | None = None, excluded_labels: list | None = None
+    session, days: int, label_name: str | None = None, excluded_labels: list | None = None
 ) -> list:
     cutoff = datetime.datetime.now(datetime.UTC).date() - datetime.timedelta(days=days)
     query = f"before:{cutoff.strftime('%Y/%m/%d')}"
@@ -190,14 +196,10 @@ def fetch_emails_older_than(
     if excluded_labels:
         for lbl in excluded_labels:
             query += f' -label:"{lbl}"'
-    return _paginate_message_ids(
-        service,
-        service.users().messages().list(userId="me", q=query, maxResults=500),
-        max_pages=5,
-    )
+    return _paginate_message_ids(session, {"maxResults": 500, "q": query}, max_pages=5)
 
 
-def batch_modify_emails(service, modifications: list) -> None:
+def batch_modify_emails(session, modifications: list) -> None:
     """Apply label modifications using batchModify. Groups by identical add/remove combos."""
     if not modifications:
         return
@@ -212,17 +214,19 @@ def batch_modify_emails(service, modifications: list) -> None:
                 body["addLabelIds"] = list(add_labels)
             if remove_labels:
                 body["removeLabelIds"] = list(remove_labels)
-            service.users().messages().batchModify(userId="me", body=body).execute()
+            resp = session.post(f"{_GMAIL_API}/users/me/messages/batchModify", json=body)
+            resp.raise_for_status()
 
 
-def batch_trash_emails(service, message_ids: list) -> int:
+def batch_trash_emails(session, message_ids: list) -> int:
     if not message_ids:
         return 0
     for i in range(0, len(message_ids), 1000):
-        service.users().messages().batchModify(
-            userId="me",
-            body={"ids": message_ids[i : i + 1000], "addLabelIds": [LABEL_TRASH], "removeLabelIds": [LABEL_INBOX]},
-        ).execute()
+        resp = session.post(
+            f"{_GMAIL_API}/users/me/messages/batchModify",
+            json={"ids": message_ids[i : i + 1000], "addLabelIds": [LABEL_TRASH], "removeLabelIds": [LABEL_INBOX]},
+        )
+        resp.raise_for_status()
     return len(message_ids)
 
 

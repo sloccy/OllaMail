@@ -13,7 +13,7 @@ def process_account(account: dict, prompts: list):
 
     # Load full account (with credentials) only when needed for this account
     full_account = db.get_account(account_id)
-    service = gmail_client.get_service_and_refresh(full_account)
+    service = gmail_client.get_session(full_account)
 
     all_ids = gmail_client.list_recent_message_ids(
         service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
