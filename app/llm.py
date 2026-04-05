@@ -3,6 +3,7 @@ import logging
 import re
 
 import ollama as _ollama
+from ollama import ResponseError as _ResponseError
 
 from app import db
 from app.config import (
@@ -27,12 +28,11 @@ class LLMError(Exception):
 
 def ensure_model_pulled() -> None:
     try:
-        models = [m.model for m in _client.list().models]
-        model_base = OLLAMA_MODEL.split(":")[0]
-        if not any(m.startswith(model_base) for m in models):
-            db.add_log("INFO", f"Pulling model {OLLAMA_MODEL} from Ollama... (this may take a while)")
-            _client.pull(OLLAMA_MODEL)
-            db.add_log("INFO", f"Model {OLLAMA_MODEL} ready.")
+        _client.show(OLLAMA_MODEL)
+    except _ResponseError:
+        db.add_log("INFO", f"Pulling model {OLLAMA_MODEL} from Ollama... (this may take a while)")
+        _client.pull(OLLAMA_MODEL)
+        db.add_log("INFO", f"Model {OLLAMA_MODEL} ready.")
     except Exception as e:
         db.add_log("WARNING", f"Could not check/pull Ollama model: {e}")
 
@@ -110,32 +110,8 @@ No explanation, no markdown, just the JSON object."""
         raise LLMError(f"LLM request failed: {e!r}") from e
 
 
-def _filter_think_chunks(buffer: str, in_think: bool, chunk: str):
-    """Append chunk to buffer, flush safe content, return (events, new_buffer, in_think).
-    Events are (type, text) tuples where type is 'think' or 'content'."""
-    buffer += chunk
-    events = []
-    while True:
-        tag = "</think>" if in_think else "<think>"
-        idx = buffer.find(tag)
-        if idx == -1:
-            safe = max(0, len(buffer) - (len(tag) - 1))
-            if safe > 0:
-                events.append(("think" if in_think else "content", buffer[:safe]))
-                buffer = buffer[safe:]
-            break
-        if idx > 0:
-            events.append(("think" if in_think else "content", buffer[:idx]))
-        buffer = buffer[idx + len(tag) :]
-        in_think = not in_think
-    return events, buffer, in_think
-
-
 def stream_generate_prompt_instruction(description: str):
     """Generator that yields {"type": "think"|"content", "text": str} dicts."""
-    has_native_thinking = False
-    in_think = False
-    buffer = ""
     for chunk in _client.chat(
         model=OLLAMA_MODEL,
         messages=[
@@ -172,21 +148,8 @@ def stream_generate_prompt_instruction(description: str):
     ):
         thinking = getattr(chunk.message, "thinking", None)
         content = chunk.message.content or ""
-
-        # Ollama library natively separates thinking from content
-        if thinking is not None and thinking != "":
-            has_native_thinking = True
+        if thinking:
             yield {"type": "think", "text": thinking}
-            # Don't continue — content on the same chunk should also be processed
         if content:
-            if has_native_thinking:
-                yield {"type": "content", "text": content}
-            else:
-                # Fallback: parse <think> tags from content (older ollama library)
-                events, buffer, in_think = _filter_think_chunks(buffer, in_think, content)
-                for evt_type, evt_text in events:
-                    if evt_text:
-                        yield {"type": evt_type, "text": evt_text}
-    if buffer:
-        yield {"type": "think" if in_think else "content", "text": buffer}
+            yield {"type": "content", "text": content}
     _logger.info("stream_generate_prompt_instruction finished")
