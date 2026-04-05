@@ -117,6 +117,7 @@ def build_label_cache(session, label_names: list) -> dict:
 
 
 def _paginate_message_ids(session, params: dict, max_pages: int = 0) -> list:
+    params = dict(params)
     ids = []
     pages = 0
     while True:
@@ -147,17 +148,17 @@ def iter_message_details(session, message_ids: list):
         results: dict = {}
 
         def _fetch_one(msg_id):
-            resp = session.get(f"{_GMAIL_API}/users/me/messages/{msg_id}", params={"format": "full"})
+            s = AuthorizedSession(session.credentials)
+            resp = s.get(f"{_GMAIL_API}/users/me/messages/{msg_id}", params={"format": "full"})
             resp.raise_for_status()
-            return msg_id, resp.json()
+            return resp.json()
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {executor.submit(_fetch_one, mid): mid for mid in batch_ids}
             for future in as_completed(futures):
                 msg_id = futures[future]
                 try:
-                    _, data = future.result()
-                    results[msg_id] = data
+                    results[msg_id] = future.result()
                 except Exception as e:
                     db.add_log("WARNING", f"Batch fetch failed for message {msg_id}: {e}")
 

@@ -4,7 +4,7 @@ from app import db, gmail_client
 _MAX_RETENTION_IDS = 2500
 
 
-def cleanup_retention(account: dict, service) -> None:
+def cleanup_retention(account: dict, session) -> None:
     """Trash emails that exceed per-label or global retention rules."""
     account_id = account["id"]
     email_addr = account["email"]
@@ -19,11 +19,11 @@ def cleanup_retention(account: dict, service) -> None:
                 continue
             total_trashed = 0
             while True:
-                ids = gmail_client.fetch_emails_older_than(service, rule["days"], rule["label_name"])
+                ids = gmail_client.fetch_emails_older_than(session, rule["days"], rule["label_name"])
                 new_ids = [i for i in ids if i not in trashed_ids]
                 if not new_ids:
                     break
-                gmail_client.batch_trash_emails(service, new_ids)
+                gmail_client.batch_trash_emails(session, new_ids)
                 trashed_ids.update(new_ids)
                 total_trashed += len(new_ids)
                 if len(ids) < _MAX_RETENTION_IDS:
@@ -39,11 +39,11 @@ def cleanup_retention(account: dict, service) -> None:
             excluded = list({rule["label_name"].lower() for rule in retention["labels"]} | exempt_lower)
             total_trashed = 0
             while True:
-                ids = gmail_client.fetch_emails_older_than(service, retention["global_days"], excluded_labels=excluded)
+                ids = gmail_client.fetch_emails_older_than(session, retention["global_days"], excluded_labels=excluded)
                 new_ids = [i for i in ids if i not in trashed_ids]
                 if not new_ids:
                     break
-                gmail_client.batch_trash_emails(service, new_ids)
+                gmail_client.batch_trash_emails(session, new_ids)
                 trashed_ids.update(new_ids)
                 total_trashed += len(new_ids)
                 if len(ids) < _MAX_RETENTION_IDS:

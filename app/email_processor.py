@@ -13,38 +13,38 @@ def process_account(account: dict, prompts: list):
 
     # Load full account (with credentials) only when needed for this account
     full_account = db.get_account(account_id)
-    service = gmail_client.get_session(full_account)
+    session = gmail_client.get_session(full_account)
 
     all_ids = gmail_client.list_recent_message_ids(
-        service, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
+        session, max_results=GMAIL_MAX_RESULTS, lookback_hours=GMAIL_LOOKBACK_HOURS
     )
     unprocessed_ids = db.filter_unprocessed(account_id, all_ids)
 
     if not unprocessed_ids:
         db.add_log("INFO", f"[{email_addr}] No new emails to process.")
         db.update_last_scan(account_id)
-        return service
+        return session
 
     db.add_log("INFO", f"[{email_addr}] Processing {len(unprocessed_ids)} new email(s) against {len(prompts)} rule(s).")
 
     unique_labels = list({p["label_name"] for p in prompts})
-    label_cache = gmail_client.build_label_cache(service, unique_labels)
+    label_cache = gmail_client.build_label_cache(session, unique_labels)
 
     all_modifies = []
     all_trashes = []
 
-    for email in gmail_client.iter_message_details(service, unprocessed_ids):
+    for email in gmail_client.iter_message_details(session, unprocessed_ids):
         modifies, trashes = _process_email(email, account_id, email_addr, prompts, label_cache)
         all_modifies.extend(modifies)
         all_trashes.extend(trashes)
 
     if all_trashes:
-        gmail_client.batch_trash_emails(service, all_trashes)
+        gmail_client.batch_trash_emails(session, all_trashes)
     if all_modifies:
-        gmail_client.batch_modify_emails(service, all_modifies)
+        gmail_client.batch_modify_emails(session, all_modifies)
 
     db.update_last_scan(account_id)
-    return service
+    return session
 
 
 def _process_email(email: dict, account_id: int, email_addr: str, prompts: list, label_cache: dict) -> tuple:
