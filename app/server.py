@@ -185,7 +185,7 @@ def _ensure_label_for_accounts(account_id, label_name):
             if not account:
                 continue
             try:
-                service = gmail_client.get_service_and_refresh(account)
+                service = gmail_client.get_session(account)
                 gmail_client.build_label_cache(service, [label_name])
             except Exception as e:
                 db.add_log("WARNING", f"Could not pre-create label '{label_name}' for account {account.get('id')}: {e}")
@@ -638,7 +638,7 @@ def _retention_panel(account_id, account=None, service=None, toast=None):
     gmail_labels = []
     if account:
         try:
-            svc = service or gmail_client.get_service_and_refresh(account)
+            svc = service or gmail_client.get_session(account)
             gmail_labels = gmail_client.list_labels(svc)
         except Exception:  # noqa: S110
             pass
@@ -656,7 +656,7 @@ def frag_retention(account_id):
         return err
     service = None
     try:
-        service = gmail_client.get_service_and_refresh(account)
+        service = gmail_client.get_session(account)
     except Exception as e:
         db.add_log("WARNING", f"Could not refresh credentials for account {account_id}: {e}")
     return _retention_panel(account_id, account, service=service)
