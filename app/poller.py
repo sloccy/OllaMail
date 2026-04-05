@@ -82,8 +82,8 @@ def _run_scan() -> None:
                 continue
             db.add_log("INFO", f"Starting scan: [{account['email']}] with {len(prompts)} prompt(s).")
             try:
-                service = process_account(account, prompts)
-                cleanup_retention(account, service)
+                session = process_account(account, prompts)
+                cleanup_retention(account, session)
             except Exception as e:
                 db.add_log("ERROR", f"[{account['email']}] Scan failed: {e}")
     finally:
