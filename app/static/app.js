@@ -123,7 +123,7 @@ function _builderDone() {
   clearTimeout(_builderEs && _builderEs._timeout);
   if (_builderEs) { _builderEs.close(); _builderEs = null; }
   const btn = document.getElementById('btn-generate');
-  btn.disabled = false; btn.textContent = '◆ Generate Instruction'; btn.classList.remove('btn-generating');
+  btn.disabled = false; btn.innerHTML = '&#9670; Generate Instruction'; btn.classList.remove('btn-generating');
   document.getElementById('btn-use-prompt').disabled = false;
 }
 
@@ -131,9 +131,8 @@ function generatePrompt() {
   const desc = document.getElementById('builder-description').value.trim();
   if (!desc) { toast('Describe the emails first.', 'error'); return; }
   const btn = document.getElementById('btn-generate');
-  btn.disabled = true; btn.textContent = 'Generating...'; btn.classList.add('btn-generating');
+  btn.disabled = true; btn.innerHTML = '<span class="btn-spinner"></span>Generating...'; btn.classList.add('btn-generating');
   document.getElementById('builder-result').style.display = 'block';
-  document.getElementById('builder-thinking').textContent = '';
   document.getElementById('builder-instruction').value = '';
 
   if (_builderEs) { _builderEs.close(); }
@@ -151,10 +150,6 @@ function generatePrompt() {
   }
   resetTimeout();
 
-  es.addEventListener('think', function(e) {
-    document.getElementById('builder-thinking').textContent += e.data;
-    resetTimeout();
-  });
   es.addEventListener('content', function(e) {
     document.getElementById('builder-instruction').value += e.data;
     resetTimeout();
