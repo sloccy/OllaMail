@@ -8,6 +8,7 @@ from ollama import ResponseError as _ResponseError
 from app import db
 from app.config import (
     DEBUG_LOGGING,
+    OLLAMA_GENERATE_NUM_PREDICT,
     OLLAMA_HOST,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
@@ -136,7 +137,7 @@ def stream_generate_prompt_instruction(description: str):
         think=True,
         options={
             "temperature": 0.7,
-            "num_predict": 4096,
+            "num_predict": OLLAMA_GENERATE_NUM_PREDICT,
             "num_ctx": OLLAMA_NUM_CTX,
         },
     ):
