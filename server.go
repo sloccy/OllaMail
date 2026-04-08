@@ -70,13 +70,35 @@ func newServer(store *db.Store, ollamaClient *llm.Client, p *poller.Poller, auth
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Accept-Encoding")
+		gz := gzip.NewWriter(w)
+		defer func() { _ = gz.Close() }()
+		s.mux.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, Writer: gz}, r)
+		return
+	}
 	s.mux.ServeHTTP(w, r)
 }
 
+// gzipResponseWriter wraps http.ResponseWriter to compress response bodies.
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	Writer *gzip.Writer
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	return g.Writer.Write(b)
+}
+
 func (s *server) registerRoutes() {
-	// Static
+	// Static (immutable per deploy — cache aggressively)
 	staticSub, _ := fs.Sub(staticFS, "static")
-	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
+	fileServer := http.StripPrefix("/static/", http.FileServer(http.FS(staticSub)))
+	s.mux.HandleFunc("GET /static/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fileServer.ServeHTTP(w, r)
+	})
 
 	// Index
 	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
@@ -144,37 +166,23 @@ func (s *server) renderFragment(w http.ResponseWriter, name string, data any) {
 }
 
 // renderFragmentFile renders a pre-parsed fragment template by its base filename.
-func (s *server) renderFragmentFile(w http.ResponseWriter, r *http.Request, path string, data any) {
+func (s *server) renderFragmentFile(w http.ResponseWriter, path string, data any) {
 	name := path[strings.LastIndex(path, "/")+1:]
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	var buf strings.Builder
-	if err := s.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
 		slog.Error("execute fragment", "name", name, "err", err)
 		http.Error(w, "render error", 500)
-		return
-	}
-	s.writeGzip(w, r, []byte(buf.String()))
-}
-
-func (s *server) writeGzip(w http.ResponseWriter, r *http.Request, body []byte) {
-	if len(body) >= 500 && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		gz := gzip.NewWriter(w)
-		defer func() { _ = gz.Close() }()
-		_, _ = gz.Write(body)
-	} else {
-		_, _ = w.Write(body)
 	}
 }
 
-func (s *server) fragmentResponse(w http.ResponseWriter, r *http.Request, path string, data any, toast string) {
+func (s *server) fragmentResponse(w http.ResponseWriter, path string, data any, toast string) {
 	if toast != "" {
 		triggers := map[string]any{"showToast": toast}
 		if b, err := json.Marshal(triggers); err == nil {
 			w.Header().Set("HX-Trigger", string(b))
 		}
 	}
-	s.renderFragmentFile(w, r, path, data)
+	s.renderFragmentFile(w, path, data)
 }
 
 func (s *server) fragmentResponseNamed(w http.ResponseWriter, _ *http.Request, name string, data any) {
@@ -209,7 +217,7 @@ func (s *server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"NextScan":      nextScan,
 		"Logs":          logs,
 	}
-	s.fragmentResponse(w, r, "templates/fragments/dashboard.html", data, "")
+	s.fragmentResponse(w, "templates/fragments/dashboard.html", data, "")
 }
 
 // ============================================================
@@ -237,7 +245,7 @@ func (s *server) handleAccounts(w http.ResponseWriter, r *http.Request) {
 			LastScanAt: a.LastScanAt.String,
 		}
 	}
-	s.fragmentResponse(w, r, "templates/fragments/accounts_list.html", views, "")
+	s.fragmentResponse(w, "templates/fragments/accounts_list.html", views, "")
 }
 
 func (s *server) handleToggleAccount(w http.ResponseWriter, r *http.Request) {
@@ -314,7 +322,7 @@ func (s *server) handlePromptsList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	accountFilter := r.URL.Query().Get("account_id")
 	views, _ := s.getPromptViews(ctx, accountFilter)
-	s.fragmentResponse(w, r, "templates/fragments/prompts_list.html", views, "")
+	s.fragmentResponse(w, "templates/fragments/prompts_list.html", views, "")
 }
 
 func (s *server) handleCreatePrompt(w http.ResponseWriter, r *http.Request) {
@@ -325,7 +333,7 @@ func (s *server) handleCreatePrompt(w http.ResponseWriter, r *http.Request) {
 	labelName := strings.TrimSpace(r.FormValue("label_name"))
 	instructions := strings.TrimSpace(r.FormValue("instructions"))
 	if name == "" {
-		s.fragmentResponse(w, r, "templates/fragments/prompts_list.html", nil, "Name is required")
+		s.fragmentResponse(w, "templates/fragments/prompts_list.html", nil, "Name is required")
 		return
 	}
 
@@ -355,7 +363,7 @@ func (s *server) handleCreatePrompt(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("create prompt", "err", err)
-		s.fragmentResponse(w, r, "templates/fragments/prompts_list.html", nil, "Failed to create rule")
+		s.fragmentResponse(w, "templates/fragments/prompts_list.html", nil, "Failed to create rule")
 		return
 	}
 
@@ -363,7 +371,7 @@ func (s *server) handleCreatePrompt(w http.ResponseWriter, r *http.Request) {
 	go s.ensureLabelForAccounts(context.Background(), labelName, accountID)
 
 	views, _ := s.getPromptViews(ctx, "")
-	s.fragmentResponse(w, r, "templates/fragments/prompts_list.html", views, "Rule saved")
+	s.fragmentResponse(w, "templates/fragments/prompts_list.html", views, "Rule saved")
 }
 
 func (s *server) handleUpdatePrompt(w http.ResponseWriter, r *http.Request) {
@@ -399,7 +407,7 @@ func (s *server) handleUpdatePrompt(w http.ResponseWriter, r *http.Request) {
 	go s.ensureLabelForAccounts(context.Background(), labelName, accountID)
 
 	views, _ := s.getPromptViews(ctx, "")
-	s.fragmentResponse(w, r, "templates/fragments/prompts_list.html", views, "Rule updated")
+	s.fragmentResponse(w, "templates/fragments/prompts_list.html", views, "Rule updated")
 }
 
 func (s *server) handleDeletePrompt(w http.ResponseWriter, r *http.Request) {
@@ -407,7 +415,7 @@ func (s *server) handleDeletePrompt(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	_ = s.store.DeletePrompt(ctx, id)
 	views, _ := s.getPromptViews(ctx, "")
-	s.fragmentResponse(w, r, "templates/fragments/prompts_list.html", views, "Rule deleted")
+	s.fragmentResponse(w, "templates/fragments/prompts_list.html", views, "Rule deleted")
 }
 
 func (s *server) handleTogglePrompt(w http.ResponseWriter, r *http.Request) {
@@ -499,7 +507,7 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"OllamaModel":  s.cfg.OllamaModel,
 		"OllamaHost":   s.cfg.OllamaHost,
 	}
-	s.fragmentResponse(w, r, "templates/fragments/settings_form.html", data, "")
+	s.fragmentResponse(w, "templates/fragments/settings_form.html", data, "")
 }
 
 func (s *server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -518,7 +526,7 @@ func (s *server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		"OllamaModel":  s.cfg.OllamaModel,
 		"OllamaHost":   s.cfg.OllamaHost,
 	}
-	s.fragmentResponse(w, r, "templates/fragments/settings_form.html", data, "Settings saved")
+	s.fragmentResponse(w, "templates/fragments/settings_form.html", data, "Settings saved")
 }
 
 // ============================================================
@@ -589,7 +597,7 @@ func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
 			views[i].ExtraActions = strings.Split(h.Actions, ",")
 		}
 	}
-	s.fragmentResponse(w, r, "templates/fragments/history_table.html", views, "")
+	s.fragmentResponse(w, "templates/fragments/history_table.html", views, "")
 }
 
 func (s *server) handleHistoryFilters(w http.ResponseWriter, r *http.Request) {
@@ -611,7 +619,7 @@ func (s *server) handleHistoryFilters(w http.ResponseWriter, r *http.Request) {
 		accountViews[i] = accountView{ID: a.ID, Email: a.Email}
 	}
 
-	s.fragmentResponse(w, r, "templates/fragments/history_filters.html", map[string]any{
+	s.fragmentResponse(w, "templates/fragments/history_filters.html", map[string]any{
 		"Accounts": accountViews,
 		"Prompts":  options,
 	}, "")
@@ -667,7 +675,7 @@ func (s *server) handleGetRetention(w http.ResponseWriter, r *http.Request) {
 	id := pathInt(r, "id")
 	ctx := r.Context()
 	data := s.buildRetentionDataWithGmail(ctx, id)
-	s.fragmentResponse(w, r, "templates/fragments/retention_panel.html", data, "")
+	s.fragmentResponse(w, "templates/fragments/retention_panel.html", data, "")
 }
 
 func (s *server) handleSetGlobalRetention(w http.ResponseWriter, r *http.Request) {
@@ -689,7 +697,7 @@ func (s *server) handleSetGlobalRetention(w http.ResponseWriter, r *http.Request
 		_ = s.store.ClearGlobalRetention(ctx, id)
 	}
 	data := s.buildRetentionDataWithGmail(ctx, id)
-	s.fragmentResponse(w, r, "templates/fragments/retention_panel.html", data, "Saved")
+	s.fragmentResponse(w, "templates/fragments/retention_panel.html", data, "Saved")
 }
 
 func (s *server) handleAddLabelRetention(w http.ResponseWriter, r *http.Request) {
@@ -707,7 +715,7 @@ func (s *server) handleAddLabelRetention(w http.ResponseWriter, r *http.Request)
 		_ = s.store.AddLabelRetention(ctx, db.AddLabelRetentionParams{AccountID: id, LabelName: label, Days: days})
 	}
 	data := s.buildRetentionDataWithGmail(ctx, id)
-	s.fragmentResponse(w, r, "templates/fragments/retention_panel.html", data, "Rule added")
+	s.fragmentResponse(w, "templates/fragments/retention_panel.html", data, "Rule added")
 }
 
 func (s *server) handleDeleteLabelRetention(w http.ResponseWriter, r *http.Request) {
@@ -716,7 +724,7 @@ func (s *server) handleDeleteLabelRetention(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	_ = s.store.DeleteLabelRetention(ctx, db.DeleteLabelRetentionParams{ID: ruleID, AccountID: id})
 	data := s.buildRetentionDataWithGmail(ctx, id)
-	s.fragmentResponse(w, r, "templates/fragments/retention_panel.html", data, "Rule removed")
+	s.fragmentResponse(w, "templates/fragments/retention_panel.html", data, "Rule removed")
 }
 
 func (s *server) handleAddExemption(w http.ResponseWriter, r *http.Request) {
@@ -728,7 +736,7 @@ func (s *server) handleAddExemption(w http.ResponseWriter, r *http.Request) {
 		_ = s.store.AddLabelExemption(ctx, db.AddLabelExemptionParams{AccountID: id, LabelName: label})
 	}
 	data := s.buildRetentionDataWithGmail(ctx, id)
-	s.fragmentResponse(w, r, "templates/fragments/retention_panel.html", data, "Exemption added")
+	s.fragmentResponse(w, "templates/fragments/retention_panel.html", data, "Exemption added")
 }
 
 func (s *server) handleDeleteExemption(w http.ResponseWriter, r *http.Request) {
@@ -737,7 +745,7 @@ func (s *server) handleDeleteExemption(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	_ = s.store.DeleteLabelExemption(ctx, db.DeleteLabelExemptionParams{ID: eid, AccountID: id})
 	data := s.buildRetentionDataWithGmail(ctx, id)
-	s.fragmentResponse(w, r, "templates/fragments/retention_panel.html", data, "Exemption removed")
+	s.fragmentResponse(w, "templates/fragments/retention_panel.html", data, "Exemption removed")
 }
 
 func (s *server) handleRetentionQuery(w http.ResponseWriter, r *http.Request) {
@@ -753,7 +761,7 @@ func (s *server) handleRetentionQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	data := s.buildRetentionDataWithGmail(ctx, id)
-	s.fragmentResponse(w, r, "templates/fragments/retention_panel.html", data, "")
+	s.fragmentResponse(w, "templates/fragments/retention_panel.html", data, "")
 }
 
 func (s *server) buildRetentionDataWithGmail(ctx context.Context, accountID int64) retentionPanelData {
@@ -822,7 +830,7 @@ func (s *server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]string{"AuthURL": authURL}
-	s.fragmentResponse(w, r, "templates/fragments/oauth_step2.html", data, "")
+	s.fragmentResponse(w, "templates/fragments/oauth_step2.html", data, "")
 }
 
 func (s *server) handleOAuthExchange(w http.ResponseWriter, r *http.Request) {
@@ -831,7 +839,7 @@ func (s *server) handleOAuthExchange(w http.ResponseWriter, r *http.Request) {
 	rawURL := r.FormValue("url")
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		s.fragmentResponse(w, r, "templates/fragments/accounts_list.html", nil, "Invalid URL")
+		s.fragmentResponse(w, "templates/fragments/accounts_list.html", nil, "Invalid URL")
 		return
 	}
 	code := parsed.Query().Get("code")
@@ -845,14 +853,14 @@ func (s *server) handleOAuthExchange(w http.ResponseWriter, r *http.Request) {
 	s.oauthMu.Unlock()
 
 	if !ok || time.Now().After(exp) {
-		s.fragmentResponse(w, r, "templates/fragments/accounts_list.html", nil, "OAuth state expired — try again")
+		s.fragmentResponse(w, "templates/fragments/accounts_list.html", nil, "OAuth state expired — try again")
 		return
 	}
 
 	emailAddr, credJSON, err := s.auth.ExchangeCode(ctx, code)
 	if err != nil {
 		slog.Error("oauth exchange", "err", err)
-		s.fragmentResponse(w, r, "templates/fragments/accounts_list.html", nil, "OAuth failed: "+err.Error())
+		s.fragmentResponse(w, "templates/fragments/accounts_list.html", nil, "OAuth failed: "+err.Error())
 		return
 	}
 
@@ -897,7 +905,7 @@ func (s *server) handleAccountOptions(w http.ResponseWriter, r *http.Request) {
 	for i, a := range accounts {
 		avs[i] = accountView{ID: a.ID, Email: a.Email}
 	}
-	s.fragmentResponse(w, r, "templates/fragments/account_options.html", map[string]any{
+	s.fragmentResponse(w, "templates/fragments/account_options.html", map[string]any{
 		"FirstOption": firstOption,
 		"Accounts":    avs,
 	}, "")
