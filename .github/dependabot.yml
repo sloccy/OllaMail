@@ -1,22 +1,12 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  - package-ecosystem: gomod
     directory: /
     schedule:
       interval: daily
     open-pull-requests-limit: 10
     groups:
-      npm-deps:
-        patterns:
-          - "*"
-
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    groups:
-      python-deps:
+      go-deps:
         patterns:
           - "*"
 

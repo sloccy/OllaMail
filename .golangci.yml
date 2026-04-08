@@ -1,0 +1,45 @@
+version: "2"
+
+linters:
+  enable:
+    # Core correctness
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    # Bug prevention
+    - bodyclose
+    - nilerr
+    - noctx
+    - durationcheck
+    - fatcontext
+    - rowserrcheck
+    - sqlclosecheck
+    - unparam
+    # Code quality
+    - gocritic
+    - errorlint
+    - unconvert
+    - nakedret
+    - intrange
+    - modernize
+    # Hygiene
+    - misspell
+    - dupword
+    - asciicheck
+    - musttag
+    - loggercheck
+    # Additional
+    - goconst
+    - nilnil
+    - prealloc
+    - perfsprint
+
+formatters:
+  enable:
+    - gofmt
+
+settings:
+  staticcheck:
+    checks: ["all", "-QF1008"]

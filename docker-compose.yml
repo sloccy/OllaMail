@@ -21,6 +21,7 @@ services:
               capabilities: [gpu]
 
   app:
+    build: .
     image: ghcr.io/sloccy/ollamail:latest
     container_name: ollamail-app
     ports:

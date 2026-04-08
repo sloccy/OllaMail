@@ -1,25 +1,24 @@
-FROM node:24-slim AS assets
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
 
-WORKDIR /build
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY app/static/ ./app/static/
-RUN npm run build
+ARG TARGETOS
+ARG TARGETARCH
 
-FROM python:3.14-alpine
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /ollamail .
 
-WORKDIR /app
+FROM alpine:3.21
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && adduser -D -u 1000 -s /sbin/nologin appuser
+RUN adduser -D -u 1000 -s /sbin/nologin appuser
 
-COPY app/ ./app/
-COPY --from=assets /build/app/static/dist/ ./app/static/dist/
-COPY --from=assets /build/app/static/vendor/ ./app/static/vendor/
-
-ENV PYTHONUNBUFFERED=1
+COPY --from=build /ollamail /ollamail
+COPY templates/ /templates/
+COPY static/ /static/
 
 USER appuser
 
-CMD ["waitress-serve", "--host=0.0.0.0", "--port=5000", "--call", "app.server:create_app"]
+EXPOSE 5000
+
+CMD ["/ollamail"]

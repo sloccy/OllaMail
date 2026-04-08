@@ -1,0 +1,350 @@
+package llm
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/sloccy/ollamail/db"
+)
+
+var fenceRe = regexp.MustCompile(`(?s)^` + "```" + `(?:json)?\s*|\s*` + "```" + `$`)
+
+type Client struct {
+	host       string
+	model      string
+	numCtx     int
+	timeout    time.Duration
+	httpClient *http.Client
+}
+
+func NewClient(host, model string, numCtx int, timeout time.Duration) *Client {
+	return &Client{
+		host:       strings.TrimRight(host, "/"),
+		model:      model,
+		numCtx:     numCtx,
+		timeout:    timeout,
+		httpClient: &http.Client{Timeout: timeout},
+	}
+}
+
+func (c *Client) Model() string { return c.model }
+
+// ============================================================
+// Model management
+// ============================================================
+
+func (c *Client) EnsureModelPulled(store *db.Store) error {
+	ctx := context.Background()
+	exists, err := c.modelExists(ctx)
+	if err != nil {
+		store.Log("WARNING", fmt.Sprintf("Could not check Ollama model: %v", err))
+		return err
+	}
+	if !exists {
+		store.Log("INFO", fmt.Sprintf("Pulling model %s from Ollama... (this may take a while)", c.model))
+		if err := c.pullModel(ctx); err != nil {
+			store.Log("WARNING", fmt.Sprintf("Could not pull Ollama model: %v", err))
+			return err
+		}
+		store.Log("INFO", fmt.Sprintf("Model %s ready.", c.model))
+	}
+	return nil
+}
+
+func (c *Client) modelExists(ctx context.Context) (bool, error) {
+	body, _ := json.Marshal(map[string]string{"model": c.model})
+	req, _ := http.NewRequestWithContext(ctx, "POST", c.host+"/api/show", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode == http.StatusOK, nil
+}
+
+func (c *Client) pullModel(ctx context.Context) error {
+	body, _ := json.Marshal(map[string]any{"model": c.model, "stream": true})
+	req, _ := http.NewRequestWithContext(ctx, "POST", c.host+"/api/pull", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// Use unlimited timeout client for pull
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	// Drain streaming response
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return nil
+}
+
+// ============================================================
+// Classification
+// ============================================================
+
+type Email struct {
+	Sender  string
+	Subject string
+	Body    string
+	Snippet string
+}
+
+type Prompt struct {
+	ID           int64
+	Name         string
+	Instructions string
+}
+
+// LLMError is returned when the LLM fails to produce a usable response.
+type LLMError struct{ Msg string }
+
+func (e *LLMError) Error() string { return e.Msg }
+
+func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email Email, prompts []Prompt) (map[int64]bool, string, error) {
+	if len(prompts) == 0 {
+		return nil, "", nil
+	}
+
+	body := buildBody(email, prompts)
+	numPredict := 50
+	if n := len(prompts) * 20; n > numPredict {
+		numPredict = n
+	}
+
+	payload := map[string]any{
+		"model": c.model,
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You are an email classification assistant. Respond only with a JSON object mapping rule numbers to true/false. No explanation, no markdown.",
+			},
+			{"role": "user", "content": body},
+		},
+		"think":  false,
+		"format": "json",
+		"stream": false,
+		"options": map[string]any{
+			"temperature": 0,
+			"num_predict": numPredict,
+			"num_ctx":     c.numCtx,
+		},
+	}
+
+	subject := email.Subject
+	if len(subject) > 60 {
+		subject = subject[:60]
+	}
+	store.Log("INFO", fmt.Sprintf("LLM classifying '%s' against %d rule(s)", subject, len(prompts)))
+
+	raw, err := c.doChat(ctx, payload)
+	if err != nil {
+		store.Log("ERROR", fmt.Sprintf("LLM request failed: %v", err))
+		return nil, "", &LLMError{Msg: fmt.Sprintf("LLM request failed: %v", err)}
+	}
+
+	store.Log("INFO", fmt.Sprintf("LLM classify response: content=%d chars", len(raw)))
+	if len(raw) > 0 {
+		preview := raw
+		if len(preview) > 500 {
+			preview = preview[:500]
+		}
+		store.Log("INFO", "LLM raw content: "+preview)
+	}
+
+	rawResponse := raw
+	raw = strings.TrimSpace(fenceRe.ReplaceAllString(raw, ""))
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		store.Log("ERROR", fmt.Sprintf("LLM parse error: %v | raw: %s", err, raw))
+		return nil, rawResponse, &LLMError{Msg: fmt.Sprintf("LLM parse error: %v", err)}
+	}
+
+	parsed := make(map[int64]bool, len(prompts))
+	for k, v := range result {
+		var idx int
+		if _, err := fmt.Sscanf(k, "%d", &idx); err != nil {
+			continue
+		}
+		idx-- // 1-based to 0-based
+		if idx >= 0 && idx < len(prompts) {
+			b, _ := v.(bool)
+			parsed[prompts[idx].ID] = b
+		}
+	}
+	return parsed, rawResponse, nil
+}
+
+func buildBody(email Email, prompts []Prompt) string {
+	var sb strings.Builder
+	for i, p := range prompts {
+		fmt.Fprintf(&sb, "%d. %s: %s\n", i+1, p.Name, p.Instructions)
+	}
+	rulesText := sb.String()
+
+	exampleParts := make([]string, min(2, len(prompts)))
+	for i := range exampleParts {
+		exampleParts[i] = fmt.Sprintf(`"%d": false`, i+1)
+	}
+
+	body := email.Body
+	if body == "" {
+		body = email.Snippet
+	}
+
+	return fmt.Sprintf(`You are an email classification assistant. You will be given an email and a list of labeling rules. For each rule, decide if the label should be applied to this email.
+
+Rules:
+%s
+Email:
+From: %s
+Subject: %s
+Body:
+%s
+
+Respond with ONLY a JSON object where each key is the rule's number (1, 2, 3...) and the value is true or false.
+Example: {%s}
+No explanation, no markdown, just the JSON object.`,
+		rulesText, email.Sender, email.Subject, body,
+		strings.Join(exampleParts, ", "))
+}
+
+// ============================================================
+// Streaming prompt generation
+// ============================================================
+
+// StreamChunk is yielded by StreamGeneratePromptInstruction.
+type StreamChunk struct {
+	Text string
+	Err  error
+}
+
+func (c *Client) StreamGeneratePromptInstruction(ctx context.Context, description string) <-chan StreamChunk {
+	ch := make(chan StreamChunk, 16)
+	go func() {
+		defer close(ch)
+		if err := c.streamGenerate(ctx, description, ch); err != nil {
+			select {
+			case ch <- StreamChunk{Err: err}:
+			case <-ctx.Done():
+			}
+		}
+	}()
+	return ch
+}
+
+func (c *Client) streamGenerate(ctx context.Context, description string, ch chan<- StreamChunk) error {
+	payload := map[string]any{
+		"model": c.model,
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You write email filter rules for an AI classifier. Output only the rule text. No preamble, no drafts, no self-critique, no quotes, no explanation.",
+			},
+			{
+				"role": "user",
+				"content": fmt.Sprintf(
+					"Write a 2-4 sentence classifier instruction for emails matching: %q\n\n"+
+						"The instruction must describe: what the email is about, its purpose/intent, "+
+						"and what distinguishes it from similar-but-non-matching emails. "+
+						"Do not use keywords or sender addresses as criteria — focus on meaning and context.\n\n"+
+						"Output ONLY the instruction text.",
+					description),
+			},
+		},
+		"stream": true,
+		"options": map[string]any{
+			"temperature": 0.7,
+			"num_predict": 2048,
+			"num_ctx":     c.numCtx,
+		},
+	}
+
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, "POST", c.host+"/api/chat", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var chunk struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+			Done bool `json:"done"`
+		}
+		if err := json.Unmarshal(line, &chunk); err != nil {
+			continue
+		}
+		if chunk.Message.Content != "" {
+			select {
+			case ch <- StreamChunk{Text: chunk.Message.Content}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		if chunk.Done {
+			break
+		}
+	}
+	slog.Info("stream_generate finished")
+	return scanner.Err()
+}
+
+// ============================================================
+// Internal
+// ============================================================
+
+func (c *Client) doChat(ctx context.Context, payload map[string]any) (string, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", c.host+"/api/chat", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("ollama %d: %s", resp.StatusCode, string(b))
+	}
+
+	var result struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return result.Message.Content, nil
+}
