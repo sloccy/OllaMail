@@ -22,19 +22,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          python-version: "3.14"
+          go-version-file: go.mod
 
-      - name: Install ruff
-        run: pip install ruff
+      - name: Build
+        run: go build ./...
 
-      - name: Lint
-        run: ruff check .
+      - name: Vet
+        run: go vet ./...
 
-      - name: Format check
-        run: ruff format --check .
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+          args: --timeout=5m
 
   build-and-push:
     runs-on: ubuntu-latest
