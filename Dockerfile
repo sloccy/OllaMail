@@ -6,8 +6,7 @@ RUN npm ci
 RUN mkdir -p vendor \
  && cp node_modules/bootstrap/dist/css/bootstrap.min.css vendor/ \
  && cp node_modules/bootstrap/dist/js/bootstrap.bundle.min.js vendor/ \
- && cp node_modules/htmx.org/dist/htmx.min.js vendor/ \
- && cp node_modules/sortablejs/Sortable.min.js vendor/
+ && cp node_modules/htmx.org/dist/htmx.min.js vendor/
 COPY static/app.js static/style.css ./
 RUN npx --yes esbuild app.js --minify --outfile=app.min.js \
  && npx --yes esbuild style.css --minify --outfile=style.min.css

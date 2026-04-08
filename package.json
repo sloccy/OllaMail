@@ -2,7 +2,6 @@
   "private": true,
   "dependencies": {
     "bootstrap": "5.3.8",
-    "htmx.org": "2.0.8",
-    "sortablejs": "1.15.7"
+    "htmx.org": "2.0.8"
   }
 }
