@@ -75,46 +75,80 @@ function downloadLogs() {
   window.location.href = `/api/logs/download?start=${encodeURIComponent(toUTC(start))}&end=${encodeURIComponent(toUTC(end))}`;
 }
 
-// ---- Drag to reorder (SortableJS — lazy-loaded) ----
-let _promptsSortable = null;
-let _sortableReady = null;
+// ---- Drag to reorder (native HTML drag-and-drop) ----
+let _dragEl = null;
+let _dragPlaceholder = null;
 
-function _loadSortable() {
-  if (_sortableReady) return _sortableReady;
-  _sortableReady = new Promise((resolve) => {
-    const s = document.createElement('script');
-    s.src = '/static/vendor/Sortable.min.js';
-    s.onload = resolve;
-    document.head.appendChild(s);
-  });
-  return _sortableReady;
-}
+function _initDragReorder() {
+  const list = document.getElementById('prompts-list');
+  if (!list) return;
 
-document.getElementById('prompts-list').addEventListener('htmx:afterSwap', function() {
-  const el = this;
-  _loadSortable().then(() => {
-    _promptsSortable?.destroy();
-    _promptsSortable = new Sortable(el, {
-      handle: '.drag-handle',
-      draggable: '.card[data-id]',
-      animation: 150,
-      ghostClass: 'drag-ghost',
-      async onEnd() {
-        const list = document.getElementById('prompts-list');
-        const orderedIds = [...list.querySelectorAll('.card[data-id]')].map(c => parseInt(c.dataset.id));
-        const resp = await fetch('/api/prompts/reorder', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ordered_ids: orderedIds }),
-        });
-        if (!resp.ok) {
-          toast('Failed to save order.', 'error');
-          const accountId = document.getElementById('prompt-filter-account')?.value || '';
-          htmx.ajax('GET', accountId ? `/fragments/prompts?account_id=${accountId}` : '/fragments/prompts', { target: '#prompts-list', swap: 'innerHTML' });
-        }
-      },
+  list.querySelectorAll('.drag-handle').forEach(handle => {
+    const card = handle.closest('.card[data-id]');
+    if (!card) return;
+    card.draggable = true;
+
+    card.addEventListener('dragstart', e => {
+      _dragEl = card;
+      card.classList.add('drag-ghost');
+      e.dataTransfer.effectAllowed = 'move';
+      // Needed for Firefox
+      e.dataTransfer.setData('text/plain', '');
+    });
+
+    card.addEventListener('dragend', async () => {
+      card.classList.remove('drag-ghost');
+      if (_dragPlaceholder && _dragPlaceholder.parentNode) {
+        _dragPlaceholder.parentNode.removeChild(_dragPlaceholder);
+      }
+      _dragPlaceholder = null;
+      const dropped = _dragEl;
+      _dragEl = null;
+      if (!dropped) return;
+
+      const orderedIds = [...list.querySelectorAll('.card[data-id]')].map(c => parseInt(c.dataset.id));
+      const resp = await fetch('/api/prompts/reorder', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordered_ids: orderedIds }),
+      });
+      if (!resp.ok) {
+        toast('Failed to save order.', 'error');
+        const accountId = document.getElementById('prompt-filter-account')?.value || '';
+        htmx.ajax('GET', accountId ? `/fragments/prompts?account_id=${accountId}` : '/fragments/prompts', { target: '#prompts-list', swap: 'innerHTML' });
+      }
     });
   });
-});
+
+  list.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (!_dragEl) return;
+    const target = _getDropTarget(e.clientY, list);
+    if (target && target !== _dragEl) {
+      const rect = target.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        list.insertBefore(_dragEl, target);
+      } else {
+        list.insertBefore(_dragEl, target.nextSibling);
+      }
+    }
+  });
+}
+
+function _getDropTarget(y, list) {
+  const cards = [...list.querySelectorAll('.card[data-id]')].filter(c => c !== _dragEl);
+  let closest = null;
+  let closestDist = Infinity;
+  for (const card of cards) {
+    const rect = card.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    const dist = Math.abs(y - mid);
+    if (dist < closestDist) { closestDist = dist; closest = card; }
+  }
+  return closest;
+}
+
+document.getElementById('prompts-list').addEventListener('htmx:afterSwap', _initDragReorder);
 
 // ---- Builder SSE ----
 let _builderEs = null;
