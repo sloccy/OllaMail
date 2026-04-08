@@ -1,11 +1,9 @@
 .git
+.claude
 *.md
+*.db
 node_modules
 docker-compose.yml
 docker-compose*.yml
-__pycache__
-**/__pycache__
-*.pyc
-*.pyo
 .env
 .env.*
