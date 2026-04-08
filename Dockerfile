@@ -1,3 +1,14 @@
+FROM node:24-slim AS assets
+
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci
+RUN mkdir -p vendor \
+ && cp node_modules/bootstrap/dist/css/bootstrap.min.css vendor/ \
+ && cp node_modules/bootstrap/dist/js/bootstrap.bundle.min.js vendor/ \
+ && cp node_modules/htmx.org/dist/htmx.min.js vendor/ \
+ && cp node_modules/sortablejs/Sortable.min.js vendor/
+
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
 
 ARG TARGETOS
@@ -16,6 +27,7 @@ RUN adduser -D -u 1000 -s /sbin/nologin appuser
 COPY --from=build /ollamail /ollamail
 COPY templates/ /templates/
 COPY static/ /static/
+COPY --from=assets /build/vendor/ /static/vendor/
 
 USER appuser
 
