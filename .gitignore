@@ -1,18 +1,11 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-*.egg
-*.egg-info/
-/dist/
-/build/
+# Go
+ollamail
+
+# Node (vendor deps only)
 node_modules/
-.eggs/
-.venv/
-venv/
-env/
+
+# Data
+*.db
 
 # Environment
 .env
@@ -27,15 +20,3 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# mypy
-.mypy_cache/
-
-# ruff
-.ruff_cache/
