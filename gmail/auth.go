@@ -75,7 +75,7 @@ func (a *Auth) ExchangeCode(ctx context.Context, code string) (string, string, e
 	if err != nil {
 		return "", "", err
 	}
-	credJSON, err := json.Marshal(token)
+	credJSON, err := json.Marshal(token) //nolint:gosec // G117: token serialization is intentional
 	if err != nil {
 		return "", "", err
 	}
