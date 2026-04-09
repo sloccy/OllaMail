@@ -3,6 +3,7 @@ package retention
 import (
 	"context"
 	"log/slog"
+	"runtime/debug"
 
 	"github.com/sloccy/ollamail/db"
 	gmailpkg "github.com/sloccy/ollamail/gmail"
@@ -15,7 +16,7 @@ const maxPages = 5
 func Cleanup(ctx context.Context, store *db.Store, svc *gmailpkg.Client, accountID int64) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("retention panic", "account_id", accountID, "err", r)
+			slog.Error("retention panic", "account_id", accountID, "err", r, "stack", string(debug.Stack()))
 		}
 	}()
 

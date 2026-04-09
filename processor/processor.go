@@ -136,7 +136,7 @@ func processEmail(
 	}
 
 	store.Log("INFO", fmt.Sprintf("[%s] Classifying: '%s' from %s",
-		account.Email, truncate(msg.Subject, 60), truncate(msg.Sender, 60)))
+		account.Email, gmailpkg.Truncate(msg.Subject, 60), gmailpkg.Truncate(msg.Sender, 60)))
 
 	results, rawResponse, llmErr := ollamaClient.ClassifyEmailBatch(ctx, store, email, llmPrompts)
 
@@ -217,7 +217,7 @@ func processEmail(
 
 		logs = append(logs, db.LogEntry{
 			Level:   "INFO",
-			Message: fmt.Sprintf("[%s] '%s' \u2014 %s (rule: %s)", account.Email, truncate(msg.Subject, 60), strings.Join(actions, ", "), p.Name),
+			Message: fmt.Sprintf("[%s] '%s' \u2014 %s (rule: %s)", account.Email, gmailpkg.Truncate(msg.Subject, 60), strings.Join(actions, ", "), p.Name),
 		})
 		history = append(history, db.HistoryEntry{
 			AccountID:    account.ID,
@@ -271,13 +271,6 @@ func filterPrompts(prompts []db.Prompt, accountID int64) []db.Prompt {
 		out = append(out, p)
 	}
 	return out
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) > maxLen {
-		return s[:maxLen]
-	}
-	return s
 }
 
 // ProcessConfig holds runtime configuration for the processor.

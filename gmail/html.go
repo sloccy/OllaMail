@@ -13,17 +13,15 @@ func extractText(src string) string {
 	inStyle := false
 	i := 0
 
-	lower := strings.ToLower(src)
-
 	for i < len(src) {
 		if !inTag && !inScript && !inStyle {
 			if src[i] == '<' {
 				inTag = true
-				// Peek at tag name
-				rest := lower[i:]
-				if strings.HasPrefix(rest, "<script") {
+				// Peek at tag name (lowercase only the short prefix needed)
+				peek := strings.ToLower(src[i:min(i+8, len(src))])
+				if strings.HasPrefix(peek, "<script") {
 					inScript = true
-				} else if strings.HasPrefix(rest, "<style") {
+				} else if strings.HasPrefix(peek, "<style") {
 					inStyle = true
 				}
 				i++
@@ -35,7 +33,7 @@ func extractText(src string) string {
 		}
 
 		if inScript {
-			if idx := strings.Index(lower[i:], "</script>"); idx >= 0 {
+			if idx := strings.Index(strings.ToLower(src[i:]), "</script>"); idx >= 0 {
 				i += idx + len("</script>")
 				inScript = false
 				inTag = false
@@ -46,7 +44,7 @@ func extractText(src string) string {
 		}
 
 		if inStyle {
-			if idx := strings.Index(lower[i:], "</style>"); idx >= 0 {
+			if idx := strings.Index(strings.ToLower(src[i:]), "</style>"); idx >= 0 {
 				i += idx + len("</style>")
 				inStyle = false
 				inTag = false
@@ -75,8 +73,8 @@ func extractText(src string) string {
 	return strings.Join(out, "\n")
 }
 
-// truncate returns s truncated to maxChars bytes (not runes, matching Python behaviour).
-func truncate(s string, maxChars int) string {
+// Truncate returns s truncated to maxChars bytes.
+func Truncate(s string, maxChars int) string {
 	if len(s) <= maxChars {
 		return s
 	}
