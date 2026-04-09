@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // register SQLite driver
 )
 
 // Store wraps the sqlc Queries with a *sql.DB and adds helpers
@@ -128,7 +128,7 @@ func (s *Store) GetOrCreateSecretKey() ([]byte, error) {
 	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
-	if err := s.Queries.SetSetting(ctx, SetSettingParams{Key: "secret_key", Value: hex.EncodeToString(key)}); err != nil { //nolint:staticcheck // .Queries needed to avoid shadowed Store.SetSetting
+	if err := s.Queries.SetSetting(ctx, SetSettingParams{Key: "secret_key", Value: hex.EncodeToString(key)}); err != nil {
 		return nil, err
 	}
 	return key, nil

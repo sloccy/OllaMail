@@ -65,7 +65,7 @@ func main() {
 	gmailAuth := gmail.NewAuth(cfg.CredentialsFile)
 
 	// Poller
-	p := poller.New(store, ollamaClient, gmailAuth, &poller.PollerConfig{
+	p := poller.New(store, ollamaClient, gmailAuth, &poller.Config{
 		LookbackHours:  cfg.GmailLookbackHours,
 		MaxResults:     int64(cfg.GmailMaxResults),
 		BodyTruncation: cfg.EmailBodyTrunc,
