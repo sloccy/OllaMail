@@ -116,10 +116,10 @@ func (p *Poller) GetStatus() Status {
 	defer p.mu.RUnlock()
 	var lastRun, nextRun string
 	if !p.lastRun.IsZero() {
-		lastRun = p.lastRun.UTC().Format("2006-01-02 15:04:05")
+		lastRun = p.lastRun.Local().Format("2006-01-02 15:04:05")
 	}
 	if !p.nextRun.IsZero() {
-		nextRun = p.nextRun.UTC().Format("2006-01-02 15:04:05")
+		nextRun = p.nextRun.Local().Format("2006-01-02 15:04:05")
 	}
 	running := !p.scanMu.TryLock()
 	if !running {
