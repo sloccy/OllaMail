@@ -39,7 +39,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	backoff := time.Second
 	for attempt := range 3 {
 		if attempt > 0 {
-			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2))) //nolint:gosec // G404: crypto rand unnecessary for jitter
 			time.Sleep(backoff + jitter)
 			backoff *= 2
 		}
@@ -47,7 +47,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			continue
 		}
-		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			_ = resp.Body.Close()
 			continue
 		}
@@ -111,7 +111,7 @@ func (s *refreshingTokenSource) Token() (*oauth2.Token, error) {
 }
 
 func marshalToken(t *oauth2.Token, fn func(string)) {
-	if b, err := json.Marshal(t); err == nil {
+	if b, err := json.Marshal(t); err == nil { //nolint:gosec // G117: token serialization is intentional
 		fn(string(b))
 	}
 }
@@ -163,8 +163,8 @@ type apiMessage struct {
 
 type apiBatchModifyRequest struct {
 	IDs            []string `json:"ids"`
-	AddLabelIds    []string `json:"addLabelIds"`
-	RemoveLabelIds []string `json:"removeLabelIds"`
+	AddLabelIDs    []string `json:"addLabelIds"`
+	RemoveLabelIDs []string `json:"removeLabelIds"`
 }
 
 // --- HTTP helpers ---
@@ -451,8 +451,8 @@ func BatchModifyEmails(ctx context.Context, svc *Client, mods []Modify) error {
 		k := key{add, remove}
 		if _, ok := grouped[k]; !ok {
 			grouped[k] = &apiBatchModifyRequest{
-				AddLabelIds:    m.AddLabels,
-				RemoveLabelIds: m.RemoveLabels,
+				AddLabelIDs:    m.AddLabels,
+				RemoveLabelIDs: m.RemoveLabels,
 			}
 		}
 		grouped[k].IDs = append(grouped[k].IDs, m.MessageIDs...)
@@ -466,8 +466,8 @@ func BatchModifyEmails(ctx context.Context, svc *Client, mods []Modify) error {
 			}
 			if err := svc.post(ctx, "/messages/batchModify", &apiBatchModifyRequest{
 				IDs:            batch,
-				AddLabelIds:    req.AddLabelIds,
-				RemoveLabelIds: req.RemoveLabelIds,
+				AddLabelIDs:    req.AddLabelIDs,
+				RemoveLabelIDs: req.RemoveLabelIDs,
 			}, nil); err != nil {
 				return err
 			}
@@ -486,8 +486,8 @@ func BatchTrashEmails(ctx context.Context, svc *Client, ids []string) error {
 		}
 		if err := svc.post(ctx, "/messages/batchModify", &apiBatchModifyRequest{
 			IDs:            batch,
-			AddLabelIds:    []string{LabelTrash},
-			RemoveLabelIds: []string{LabelInbox},
+			AddLabelIDs:    []string{LabelTrash},
+			RemoveLabelIDs: []string{LabelInbox},
 		}, nil); err != nil {
 			return err
 		}

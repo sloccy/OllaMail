@@ -61,8 +61,11 @@ func (c *Client) EnsureModelPulled(store *db.Store) error {
 }
 
 func (c *Client) modelExists(ctx context.Context) (bool, error) {
-	body, _ := json.Marshal(map[string]string{"model": c.model})
-	req, _ := http.NewRequestWithContext(ctx, "POST", c.host+"/api/show", bytes.NewReader(body))
+	body, err := json.Marshal(map[string]string{"model": c.model})
+	if err != nil {
+		return false, err
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.host+"/api/show", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -73,8 +76,11 @@ func (c *Client) modelExists(ctx context.Context) (bool, error) {
 }
 
 func (c *Client) pullModel(ctx context.Context) error {
-	body, _ := json.Marshal(map[string]any{"model": c.model, "stream": true})
-	req, _ := http.NewRequestWithContext(ctx, "POST", c.host+"/api/pull", bytes.NewReader(body))
+	body, err := json.Marshal(map[string]any{"model": c.model, "stream": true})
+	if err != nil {
+		return err
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.host+"/api/pull", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	// Use unlimited timeout client for pull
 	resp, err := (&http.Client{}).Do(req)
@@ -104,10 +110,10 @@ type Prompt struct {
 	Instructions string
 }
 
-// LLMError is returned when the LLM fails to produce a usable response.
-type LLMError struct{ Msg string }
+// Error is returned when the LLM fails to produce a usable response.
+type Error struct{ Msg string }
 
-func (e *LLMError) Error() string { return e.Msg }
+func (e *Error) Error() string { return e.Msg }
 
 func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email Email, prompts []Prompt) (map[int64]bool, string, error) {
 	if len(prompts) == 0 {
@@ -148,7 +154,7 @@ func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email 
 	raw, err := c.doChat(ctx, payload)
 	if err != nil {
 		store.Log("ERROR", fmt.Sprintf("LLM request failed: %v", err))
-		return nil, "", &LLMError{Msg: fmt.Sprintf("LLM request failed: %v", err)}
+		return nil, "", &Error{Msg: fmt.Sprintf("LLM request failed: %v", err)}
 	}
 
 	store.Log("INFO", fmt.Sprintf("LLM classify response: content=%d chars", len(raw)))
@@ -166,7 +172,7 @@ func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email 
 	var result map[string]any
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		store.Log("ERROR", fmt.Sprintf("LLM parse error: %v | raw: %s", err, raw))
-		return nil, rawResponse, &LLMError{Msg: fmt.Sprintf("LLM parse error: %v", err)}
+		return nil, rawResponse, &Error{Msg: fmt.Sprintf("LLM parse error: %v", err)}
 	}
 
 	parsed := make(map[int64]bool, len(prompts))
@@ -269,8 +275,11 @@ func (c *Client) streamGenerate(ctx context.Context, description string, ch chan
 		},
 	}
 
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, "POST", c.host+"/api/chat", bytes.NewReader(body))
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.host+"/api/chat", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -321,7 +330,7 @@ func (c *Client) doChat(ctx context.Context, payload map[string]any) (string, er
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", c.host+"/api/chat", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.host+"/api/chat", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}

@@ -21,7 +21,7 @@ type Poller struct {
 	store        *db.Store
 	ollamaClient *llm.Client
 	gmailAuth    *gmail.Auth
-	cfg          *PollerConfig
+	cfg          *Config
 
 	mu          sync.RWMutex
 	interval    time.Duration
@@ -35,8 +35,8 @@ type Poller struct {
 	cancel context.CancelFunc
 }
 
-// PollerConfig holds the runtime configuration needed by the poller.
-type PollerConfig struct {
+// Config holds the runtime configuration needed by the poller.
+type Config struct {
 	LookbackHours  int
 	MaxResults     int64
 	BodyTruncation int
@@ -51,7 +51,7 @@ type Status struct {
 	NextRun string
 }
 
-func New(store *db.Store, ollamaClient *llm.Client, auth *gmail.Auth, cfg *PollerConfig) *Poller {
+func New(store *db.Store, ollamaClient *llm.Client, auth *gmail.Auth, cfg *Config) *Poller {
 	return &Poller{
 		store:        store,
 		ollamaClient: ollamaClient,

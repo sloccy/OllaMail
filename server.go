@@ -69,7 +69,10 @@ func newServer(store *db.Store, ollamaClient *llm.Client, p *poller.Poller, auth
 	return s
 }
 
+const maxBodySize = 10 << 20 // 10 MB
+
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Vary", "Accept-Encoding")
@@ -171,7 +174,7 @@ func (s *server) renderFragmentFile(w http.ResponseWriter, path string, data any
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
 		slog.Error("execute fragment", "name", name, "err", err)
-		http.Error(w, "render error", 500)
+		http.Error(w, "render error", http.StatusInternalServerError)
 	}
 }
 
@@ -251,7 +254,7 @@ func (s *server) handleAccounts(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleToggleAccount(w http.ResponseWriter, r *http.Request) {
 	id := pathInt(r, "id")
 	if id == 0 {
-		http.Error(w, "bad id", 400)
+		http.Error(w, "bad id", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
@@ -262,7 +265,7 @@ func (s *server) handleToggleAccount(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	id := pathInt(r, "id")
 	if id == 0 {
-		http.Error(w, "bad id", 400)
+		http.Error(w, "bad id", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
@@ -368,7 +371,7 @@ func (s *server) handleCreatePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pre-create label in background for all matching accounts
-	go s.ensureLabelForAccounts(context.Background(), labelName, accountID)
+	go s.ensureLabelForAccounts(context.Background(), labelName, accountID) //nolint:gosec // G118: must outlive request
 
 	views, _ := s.getPromptViews(ctx, "")
 	s.fragmentResponse(w, "templates/fragments/prompts_list.html", views, "Rule saved")
@@ -377,7 +380,7 @@ func (s *server) handleCreatePrompt(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleUpdatePrompt(w http.ResponseWriter, r *http.Request) {
 	id := pathInt(r, "id")
 	if id == 0 {
-		http.Error(w, "bad id", 400)
+		http.Error(w, "bad id", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
@@ -404,7 +407,7 @@ func (s *server) handleUpdatePrompt(w http.ResponseWriter, r *http.Request) {
 		ID:             id,
 	})
 
-	go s.ensureLabelForAccounts(context.Background(), labelName, accountID)
+	go s.ensureLabelForAccounts(context.Background(), labelName, accountID) //nolint:gosec // G118: must outlive request
 
 	views, _ := s.getPromptViews(ctx, "")
 	s.fragmentResponse(w, "templates/fragments/prompts_list.html", views, "Rule updated")
@@ -425,7 +428,7 @@ func (s *server) handleTogglePrompt(w http.ResponseWriter, r *http.Request) {
 
 	p, err := s.store.GetPrompt(ctx, id)
 	if err != nil {
-		http.Error(w, "not found", 404)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	accounts, _ := s.store.ListAccountsSafe(ctx)
@@ -438,7 +441,7 @@ func (s *server) handleEditPrompt(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p, err := s.store.GetPrompt(ctx, id)
 	if err != nil {
-		http.Error(w, "not found", 404)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	accounts, _ := s.store.ListAccountsSafe(ctx)
@@ -458,7 +461,7 @@ func (s *server) handleViewPrompt(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p, err := s.store.GetPrompt(ctx, id)
 	if err != nil {
-		http.Error(w, "not found", 404)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	accounts, _ := s.store.ListAccountsSafe(ctx)
@@ -751,12 +754,12 @@ func (s *server) handleDeleteExemption(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleRetentionQuery(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("account_id")
 	if idStr == "" {
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 	if id == 0 {
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	ctx := r.Context()
@@ -818,7 +821,7 @@ func (s *server) buildRetentionDataWithGmail(ctx context.Context, accountID int6
 // OAuth
 // ============================================================
 
-func (s *server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleOAuthStart(w http.ResponseWriter, _ *http.Request) {
 	state := generateToken(16)
 	s.oauthMu.Lock()
 	s.oauthState[state] = time.Now().Add(10 * time.Minute)
@@ -826,7 +829,7 @@ func (s *server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 
 	authURL, err := s.auth.GetAuthURL(state)
 	if err != nil {
-		http.Error(w, "Could not generate auth URL: "+err.Error(), 500)
+		http.Error(w, "Could not generate auth URL: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	data := map[string]string{"AuthURL": authURL}
@@ -876,10 +879,10 @@ func (s *server) handleOAuthExchange(w http.ResponseWriter, r *http.Request) {
 // Scan
 // ============================================================
 
-func (s *server) handleScan(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleScan(w http.ResponseWriter, _ *http.Request) {
 	s.poller.RunNow()
 	w.Header().Set("HX-Trigger", `{"showToast":"Scan triggered"}`)
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusOK)
 }
 
 // ============================================================
@@ -921,14 +924,14 @@ func (s *server) handleReorderPrompts(w http.ResponseWriter, r *http.Request) {
 		OrderedIDs []int64 `json:"ordered_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad body", 400)
+		http.Error(w, "bad body", http.StatusBadRequest)
 		return
 	}
 	if err := s.store.ReorderPrompts(ctx, body.OrderedIDs); err != nil {
-		http.Error(w, "reorder failed", 500)
+		http.Error(w, "reorder failed", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) handleExportPrompts(w http.ResponseWriter, r *http.Request) {
@@ -936,7 +939,7 @@ func (s *server) handleExportPrompts(w http.ResponseWriter, r *http.Request) {
 	prompts, _ := s.store.ListPrompts(ctx)
 	w.Header().Set("Content-Disposition", "attachment; filename=prompts.json")
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(prompts) //nolint:musttag // sqlc-generated struct lacks json tags by design
+	_ = json.NewEncoder(w).Encode(prompts) //nolint:musttag,errchkjson // sqlc-generated struct; HTTP write error is unrecoverable
 }
 
 type configExport struct {
@@ -987,7 +990,7 @@ func (s *server) handleExportConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Disposition", "attachment; filename=ollamail-config.json")
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(configExport{ //nolint:musttag // sqlc-generated nested structs lack json tags by design
+	_ = json.NewEncoder(w).Encode(configExport{ //nolint:musttag,errchkjson // sqlc-generated struct; HTTP write error is unrecoverable
 		Accounts:  safeAccounts,
 		Prompts:   prompts,
 		Settings:  settings,
@@ -1039,7 +1042,7 @@ func (s *server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"imported": imported})
+	_ = json.NewEncoder(w).Encode(map[string]any{"imported": imported}) //nolint:errchkjson // HTTP write error is unrecoverable
 }
 
 func (s *server) handleDownloadLogs(w http.ResponseWriter, r *http.Request) {
@@ -1071,7 +1074,7 @@ func (s *server) handleDownloadLogs(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 	description := r.URL.Query().Get("description")
 	if description == "" {
-		http.Error(w, "description required", 400)
+		http.Error(w, "description required", http.StatusBadRequest)
 		return
 	}
 
@@ -1081,7 +1084,7 @@ func (s *server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", 500)
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
 
@@ -1090,7 +1093,7 @@ func (s *server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 		if chunk.Err != nil {
 			break
 		}
-		b, _ := json.Marshal(map[string]string{"type": "content", "text": chunk.Text})
+		b, _ := json.Marshal(map[string]string{"type": "content", "text": chunk.Text}) //nolint:errchkjson // map[string]string cannot fail
 		_, _ = fmt.Fprintf(w, "data: %s\n\n", b)
 		flusher.Flush()
 	}
@@ -1156,5 +1159,5 @@ func generateToken(n int) string {
 func jsonError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg}) //nolint:errchkjson // HTTP write error is unrecoverable
 }

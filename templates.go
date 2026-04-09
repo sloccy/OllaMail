@@ -21,7 +21,7 @@ func tmplFuncs() template.FuncMap {
 		"fmtinterval":    fmtinterval,
 		"fmtretention":   fmtretention,
 		"toJSON":         toJSON,
-		"safeHTML":       func(s string) template.HTML { return template.HTML(s) },
+		"safeHTML":       func(s string) template.HTML { return template.HTML(s) }, //nolint:gosec // G203: used with trusted internal strings only
 		"printf":         fmt.Sprintf,
 		"dict":           dict,
 		"not":            func(b bool) bool { return !b },
@@ -67,7 +67,7 @@ func fmtdateStacked(ts string) template.HTML {
 	}
 	date := t.Format("2 Jan")
 	timeStr := t.Format("15:04")
-	return template.HTML(date + `<br><span class="text-muted">` + timeStr + `</span>`)
+	return template.HTML(date + `<br><span class="text-muted">` + timeStr + `</span>`) //nolint:gosec // G203: formatted from parsed time, no user input
 }
 
 func fmtinterval(secs int) string {
@@ -100,7 +100,7 @@ func toJSON(v any) template.JS {
 	if err != nil {
 		return template.JS("null")
 	}
-	return template.JS(b)
+	return template.JS(b) //nolint:gosec // G203: JSON-encoded from internal data
 }
 
 // loadTemplates parses all embedded templates.
