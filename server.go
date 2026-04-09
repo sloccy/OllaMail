@@ -652,7 +652,7 @@ func (s *server) handleHistoryLlmResponse(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<pre class="mt-1 p-1 border rounded bg-body-secondary font-monospace" style="font-size:.7rem;max-width:100%%;white-space:pre-wrap;word-break:break-all;">%s</pre>`,
+	_, _ = fmt.Fprintf(w, `<pre class="mt-1 p-1 border rounded bg-body-secondary font-monospace" style="font-size:.7rem;max-width:100%%;white-space:pre-wrap;word-break:break-all;">%s</pre>`,
 		template.HTMLEscapeString(resp))
 }
 
