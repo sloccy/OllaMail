@@ -42,6 +42,10 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2))) //nolint:gosec // G404: crypto rand unnecessary for jitter
 			time.Sleep(backoff + jitter)
 			backoff *= 2
+			// Reset the request body so retries send the full payload.
+			if req.GetBody != nil {
+				req.Body, _ = req.GetBody()
+			}
 		}
 		resp, err = t.base.RoundTrip(req)
 		if err != nil {
@@ -388,7 +392,7 @@ func extractPayloadBody(payload *apiMessagePart, maxChars int) string {
 	if payload == nil {
 		return ""
 	}
-	return truncate(extractBodyRecursive(payload, maxChars*10), maxChars)
+	return Truncate(extractBodyRecursive(payload, maxChars*10), maxChars)
 }
 
 func extractBodyRecursive(part *apiMessagePart, maxChars int) string {
@@ -413,7 +417,7 @@ func extractBodyRecursive(part *apiMessagePart, maxChars int) string {
 		if strings.Contains(mimeType, "html") {
 			text = extractText(text)
 		}
-		return truncate(text, maxChars)
+		return Truncate(text, maxChars)
 	}
 
 	// Prefer text/plain part

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -71,13 +72,23 @@ func newServer(store *db.Store, ollamaClient *llm.Client, p *poller.Poller, auth
 
 const maxBodySize = 10 << 20 // 10 MB
 
+var gzipPool = sync.Pool{
+	New: func() any {
+		return gzip.NewWriter(io.Discard)
+	},
+}
+
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Vary", "Accept-Encoding")
-		gz := gzip.NewWriter(w)
-		defer func() { _ = gz.Close() }()
+		gz := gzipPool.Get().(*gzip.Writer) //nolint:forcetypeassert // pool only contains *gzip.Writer
+		gz.Reset(w)
+		defer func() {
+			_ = gz.Close()
+			gzipPool.Put(gz)
+		}()
 		s.mux.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, Writer: gz}, r)
 		return
 	}
@@ -92,6 +103,13 @@ type gzipResponseWriter struct {
 
 func (g *gzipResponseWriter) Write(b []byte) (int, error) {
 	return g.Writer.Write(b)
+}
+
+func (g *gzipResponseWriter) Flush() {
+	_ = g.Writer.Flush()
+	if f, ok := g.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (s *server) registerRoutes() {
@@ -109,7 +127,7 @@ func (s *server) registerRoutes() {
 			http.NotFound(w, r)
 			return
 		}
-		s.renderPage(w, "index.html", nil)
+		s.render(w, "index.html", nil)
 	})
 
 	// Fragments
@@ -154,17 +172,10 @@ func (s *server) registerRoutes() {
 // Template rendering helpers
 // ============================================================
 
-func (s *server) renderPage(w http.ResponseWriter, name string, data any) {
+func (s *server) render(w http.ResponseWriter, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
-		slog.Error("render page", "name", name, "err", err)
-	}
-}
-
-func (s *server) renderFragment(w http.ResponseWriter, name string, data any) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
-		slog.Error("render fragment", "name", name, "err", err)
+		slog.Error("render template", "name", name, "err", err)
 	}
 }
 
@@ -188,8 +199,8 @@ func (s *server) fragmentResponse(w http.ResponseWriter, path string, data any, 
 	s.renderFragmentFile(w, path, data)
 }
 
-func (s *server) fragmentResponseNamed(w http.ResponseWriter, _ *http.Request, name string, data any) {
-	s.renderFragment(w, name, data)
+func (s *server) fragmentResponseNamed(w http.ResponseWriter, name string, data any) {
+	s.render(w, name, data)
 }
 
 // ============================================================
@@ -238,17 +249,7 @@ type accountView struct {
 func (s *server) handleAccounts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rows, _ := s.store.ListAccountsSafe(ctx)
-	views := make([]accountView, len(rows))
-	for i, a := range rows {
-		views[i] = accountView{
-			ID:         a.ID,
-			Email:      a.Email,
-			Active:     a.Active != 0,
-			AddedAt:    a.AddedAt,
-			LastScanAt: a.LastScanAt.String,
-		}
-	}
-	s.fragmentResponse(w, "templates/fragments/accounts_list.html", views, "")
+	s.fragmentResponse(w, "templates/fragments/accounts_list.html", toAccountViews(rows), "")
 }
 
 func (s *server) handleToggleAccount(w http.ResponseWriter, r *http.Request) {
@@ -351,6 +352,8 @@ func (s *server) handleCreatePrompt(w http.ResponseWriter, r *http.Request) {
 	var maxOrder int64
 	if v, ok := maxOrderRaw.(int64); ok {
 		maxOrder = v
+	} else {
+		slog.Warn("MaxPromptSortOrder returned unexpected type", "type", fmt.Sprintf("%T", maxOrderRaw))
 	}
 	_, err := s.store.CreatePrompt(ctx, db.CreatePromptParams{
 		Name:           name,
@@ -433,7 +436,7 @@ func (s *server) handleTogglePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 	accounts, _ := s.store.ListAccountsSafe(ctx)
 	pv := dbPromptToView(p, buildAccountMap(accounts))
-	s.fragmentResponseNamed(w, r, "prompt_card_view", pv)
+	s.fragmentResponseNamed(w, "prompt_card_view", pv)
 }
 
 func (s *server) handleEditPrompt(w http.ResponseWriter, r *http.Request) {
@@ -445,15 +448,11 @@ func (s *server) handleEditPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accounts, _ := s.store.ListAccountsSafe(ctx)
-	accountViews := make([]accountView, len(accounts))
-	for i, a := range accounts {
-		accountViews[i] = accountView{ID: a.ID, Email: a.Email}
-	}
 	data := promptEditView{
 		Prompt:   dbPromptToView(p, buildAccountMap(accounts)),
-		Accounts: accountViews,
+		Accounts: toAccountViews(accounts),
 	}
-	s.fragmentResponseNamed(w, r, "prompt_card_edit", data)
+	s.fragmentResponseNamed(w, "prompt_card_edit", data)
 }
 
 func (s *server) handleViewPrompt(w http.ResponseWriter, r *http.Request) {
@@ -465,7 +464,7 @@ func (s *server) handleViewPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accounts, _ := s.store.ListAccountsSafe(ctx)
-	s.fragmentResponseNamed(w, r, "prompt_card_view", dbPromptToView(p, buildAccountMap(accounts)))
+	s.fragmentResponseNamed(w, "prompt_card_view", dbPromptToView(p, buildAccountMap(accounts)))
 }
 
 func buildAccountMap(accounts []db.ListAccountsSafeRow) map[int64]string {
@@ -474,6 +473,20 @@ func buildAccountMap(accounts []db.ListAccountsSafeRow) map[int64]string {
 		m[a.ID] = a.Email
 	}
 	return m
+}
+
+func toAccountViews(accounts []db.ListAccountsSafeRow) []accountView {
+	views := make([]accountView, len(accounts))
+	for i, a := range accounts {
+		views[i] = accountView{
+			ID:         a.ID,
+			Email:      a.Email,
+			Active:     a.Active != 0,
+			AddedAt:    a.AddedAt,
+			LastScanAt: a.LastScanAt.String,
+		}
+	}
+	return views
 }
 
 func dbPromptToView(p db.Prompt, accountMap map[int64]string) promptView {
@@ -539,7 +552,7 @@ func (s *server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logs, _ := s.store.GetLogs(ctx, 100)
-	s.fragmentResponseNamed(w, r, "logs_list", logs)
+	s.fragmentResponseNamed(w, "logs_list", logs)
 }
 
 // ============================================================
@@ -617,13 +630,8 @@ func (s *server) handleHistoryFilters(w http.ResponseWriter, r *http.Request) {
 		options[i] = promptOption{ID: p.ID, Name: p.Name}
 	}
 
-	accountViews := make([]accountView, len(accounts))
-	for i, a := range accounts {
-		accountViews[i] = accountView{ID: a.ID, Email: a.Email}
-	}
-
 	s.fragmentResponse(w, "templates/fragments/history_filters.html", map[string]any{
-		"Accounts": accountViews,
+		"Accounts": toAccountViews(accounts),
 		"Prompts":  options,
 	}, "")
 }
@@ -660,16 +668,6 @@ func (s *server) buildRetentionData(ctx context.Context, accountID int64) retent
 
 	data.Exemptions, _ = s.store.GetLabelExemptions(ctx, accountID)
 	data.LabelRules, _ = s.store.GetLabelRetention(ctx, accountID)
-
-	// Build available labels (excluding already used ones)
-	exemptSet := map[string]bool{}
-	for _, e := range data.Exemptions {
-		exemptSet[strings.ToLower(e.LabelName)] = true
-	}
-	ruleSet := map[string]bool{}
-	for _, r := range data.LabelRules {
-		ruleSet[strings.ToLower(r.LabelName)] = true
-	}
 
 	return data
 }
@@ -904,13 +902,9 @@ func (s *server) handleAccountOptions(w http.ResponseWriter, r *http.Request) {
 		firstOption = template.HTML(`<option value="">All accounts (global)</option>`)
 	}
 
-	avs := make([]accountView, len(accounts))
-	for i, a := range accounts {
-		avs[i] = accountView{ID: a.ID, Email: a.Email}
-	}
 	s.fragmentResponse(w, "templates/fragments/account_options.html", map[string]any{
 		"FirstOption": firstOption,
-		"Accounts":    avs,
+		"Accounts":    toAccountViews(accounts),
 	}, "")
 }
 
@@ -962,11 +956,11 @@ func (s *server) handleExportConfig(w http.ResponseWriter, r *http.Request) {
 	prompts, _ := s.store.ListPrompts(ctx)
 	allSettings, _ := s.store.GetAllSettings(ctx)
 	var settings []db.Setting
-	for _, s := range allSettings {
-		if s.Key == "secret_key" {
+	for _, setting := range allSettings {
+		if setting.Key == "secret_key" {
 			continue
 		}
-		settings = append(settings, s)
+		settings = append(settings, setting)
 	}
 
 	// Strip credentials from export
