@@ -442,22 +442,9 @@ func (s *Store) ApplyPromptSuggestionAndUpdatePrompt(ctx context.Context, sugges
 	return tx.Commit()
 }
 
-// GetCurrentPromptIDsForMessage returns the set of prompt IDs currently considered
-// applied to the given message. It uses the most recent email_correction if one exists;
-// otherwise falls back to the original history rows.
+// GetCurrentPromptIDsForMessage returns the set of prompt IDs currently applied
+// to the given message, derived directly from categorization_history.
 func (s *Store) GetCurrentPromptIDsForMessage(ctx context.Context, messageID string) (map[int64]bool, error) {
-	correction, err := s.GetLatestCorrectionForMessage(ctx, messageID)
-	if err == nil && correction.CurrentPromptIds != "" {
-		set := make(map[int64]bool)
-		for _, part := range splitCSV(correction.CurrentPromptIds) {
-			var id int64
-			if _, scanErr := fmt.Sscanf(part, "%d", &id); scanErr == nil {
-				set[id] = true
-			}
-		}
-		return set, nil
-	}
-	// Fall back to original history rows
 	nullIDs, err := s.GetPromptIDsByMessageID(ctx, messageID)
 	if err != nil {
 		return nil, err
@@ -471,19 +458,70 @@ func (s *Store) GetCurrentPromptIDsForMessage(ctx context.Context, messageID str
 	return set, nil
 }
 
-func splitCSV(s string) []string {
-	if s == "" {
-		return nil
+// RewriteHistoryForMessage rewrites categorization_history for the given message
+// so it mirrors the post-correction labeling state. Rows for keptIDs are preserved;
+// all other rows for the message are deleted. Fresh rows are inserted for each prompt
+// in addedPrompts. If the result would be zero rows, a "no match" sentinel is inserted
+// so the message still appears in history.
+func (s *Store) RewriteHistoryForMessage(ctx context.Context, messageID string, keptIDs []int64, addedPrompts []Prompt, base CategorizationHistory) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
 	}
-	parts := strings.Split(s, ",")
-	var out []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
+	defer func() { _ = tx.Rollback() }()
+
+	if len(keptIDs) == 0 {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM categorization_history WHERE message_id = ?`, messageID); err != nil {
+			return err
+		}
+	} else {
+		placeholders := strings.Repeat("?,", len(keptIDs))
+		placeholders = placeholders[:len(placeholders)-1]
+		args := make([]any, 0, 1+len(keptIDs))
+		args = append(args, messageID)
+		for _, id := range keptIDs {
+			args = append(args, id)
+		}
+		q := fmt.Sprintf( //nolint:gosec // placeholders built from len(keptIDs), not user input
+			`DELETE FROM categorization_history WHERE message_id = ? AND (prompt_id IS NULL OR prompt_id NOT IN (%s))`,
+			placeholders,
+		)
+		if _, err := tx.ExecContext(ctx, q, args...); err != nil {
+			return err
 		}
 	}
-	return out
+
+	qw := s.WithTx(tx)
+	for _, p := range addedPrompts {
+		if err := qw.AddHistory(ctx, AddHistoryParams{
+			AccountID:    base.AccountID,
+			AccountEmail: base.AccountEmail,
+			MessageID:    messageID,
+			Subject:      base.Subject,
+			Sender:       base.Sender,
+			PromptID:     sql.NullInt64{Int64: p.ID, Valid: true},
+			PromptName:   sql.NullString{String: p.Name, Valid: true},
+			LabelName:    sql.NullString{String: p.LabelName, Valid: p.LabelName != ""},
+			Actions:      "manual",
+		}); err != nil {
+			return err
+		}
+	}
+
+	// Ensure a sentinel row exists if everything was removed
+	if len(keptIDs) == 0 && len(addedPrompts) == 0 {
+		if err := qw.AddHistory(ctx, AddHistoryParams{
+			AccountID:    base.AccountID,
+			AccountEmail: base.AccountEmail,
+			MessageID:    messageID,
+			Subject:      base.Subject,
+			Sender:       base.Sender,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // ============================================================

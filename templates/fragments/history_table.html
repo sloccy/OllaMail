@@ -28,19 +28,21 @@
           <span class="llm-content"></span>
         </details>
         {{end}}
-        <button class="btn btn-outline-secondary btn-sm py-0 px-1 mt-1" style="font-size:.7rem;"
-          hx-get="/fragments/history/{{.ID}}/recategorize"
-          hx-target="#recategorize-modal-body"
-          hx-swap="innerHTML"
-          hx-on::after-request="new bootstrap.Modal(document.getElementById('recategorize-modal')).show()">
-          ✏ Recategorize
-        </button>
       </div>
+    </td>
+    <td class="col-edit">
+      <button class="btn btn-outline-secondary btn-sm"
+        hx-get="/fragments/history/{{.ID}}/recategorize"
+        hx-target="#recategorize-modal-body"
+        hx-swap="innerHTML"
+        hx-on::after-request="new bootstrap.Modal(document.getElementById('recategorize-modal')).show()">
+        ✏ Recategorize
+      </button>
     </td>
   </tr>
   {{end}}
 {{else}}
-<tr><td colspan="6"><div class="text-center text-muted py-5">
+<tr><td colspan="7"><div class="text-center text-muted py-5">
   <div class="opacity-25 mb-2"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 10v6l4 3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
   No matching history found.
 </div></td></tr>
