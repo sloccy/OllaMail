@@ -98,6 +98,16 @@ func (q *Queries) AddLog(ctx context.Context, arg AddLogParams) error {
 	return err
 }
 
+const applyPromptSuggestion = `-- name: ApplyPromptSuggestion :exec
+UPDATE prompt_suggestions SET status = 'applied', updated_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?
+`
+
+func (q *Queries) ApplyPromptSuggestion(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, applyPromptSuggestion, id)
+	return err
+}
+
 const clearGlobalRetention = `-- name: ClearGlobalRetention :exec
 DELETE FROM account_retention WHERE account_id = ?
 `
@@ -113,6 +123,17 @@ SELECT COUNT(*) FROM prompts WHERE active = 1
 
 func (q *Queries) CountActivePrompts(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countActivePrompts)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPendingPromptSuggestions = `-- name: CountPendingPromptSuggestions :one
+SELECT COUNT(*) FROM prompt_suggestions WHERE status = 'pending'
+`
+
+func (q *Queries) CountPendingPromptSuggestions(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPendingPromptSuggestions)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -268,6 +289,16 @@ DELETE FROM prompts WHERE account_id = ?
 // ============================================================
 func (q *Queries) DeletePromptsByAccount(ctx context.Context, accountID sql.NullInt64) error {
 	_, err := q.db.ExecContext(ctx, deletePromptsByAccount, accountID)
+	return err
+}
+
+const dismissPromptSuggestion = `-- name: DismissPromptSuggestion :exec
+UPDATE prompt_suggestions SET status = 'dismissed', updated_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?
+`
+
+func (q *Queries) DismissPromptSuggestion(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, dismissPromptSuggestion, id)
 	return err
 }
 
@@ -487,6 +518,36 @@ func (q *Queries) GetHistoryByPrompt(ctx context.Context, arg GetHistoryByPrompt
 	return items, nil
 }
 
+const getHistoryRow = `-- name: GetHistoryRow :one
+
+SELECT id, timestamp, account_id, account_email, message_id, subject, sender,
+       prompt_id, prompt_name, label_name, actions, llm_response
+FROM categorization_history WHERE id = ? LIMIT 1
+`
+
+// ============================================================
+// Categorization History (additional)
+// ============================================================
+func (q *Queries) GetHistoryRow(ctx context.Context, id int64) (CategorizationHistory, error) {
+	row := q.db.QueryRowContext(ctx, getHistoryRow, id)
+	var i CategorizationHistory
+	err := row.Scan(
+		&i.ID,
+		&i.Timestamp,
+		&i.AccountID,
+		&i.AccountEmail,
+		&i.MessageID,
+		&i.Subject,
+		&i.Sender,
+		&i.PromptID,
+		&i.PromptName,
+		&i.LabelName,
+		&i.Actions,
+		&i.LlmResponse,
+	)
+	return i, err
+}
+
 const getHistoryUncategorized = `-- name: GetHistoryUncategorized :many
 SELECT id, timestamp, account_id, account_email, message_id, subject, sender,
        prompt_id, prompt_name, label_name, actions, llm_response
@@ -591,6 +652,30 @@ func (q *Queries) GetLabelRetention(ctx context.Context, accountID int64) ([]Lab
 		return nil, err
 	}
 	return items, nil
+}
+
+const getLatestCorrectionForMessage = `-- name: GetLatestCorrectionForMessage :one
+SELECT id, created_at, account_id, message_id, added_prompts, removed_prompts, current_prompt_ids, note
+FROM email_corrections
+WHERE message_id = ?
+ORDER BY id DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestCorrectionForMessage(ctx context.Context, messageID string) (EmailCorrection, error) {
+	row := q.db.QueryRowContext(ctx, getLatestCorrectionForMessage, messageID)
+	var i EmailCorrection
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.AccountID,
+		&i.MessageID,
+		&i.AddedPrompts,
+		&i.RemovedPrompts,
+		&i.CurrentPromptIds,
+		&i.Note,
+	)
+	return i, err
 }
 
 const getLogs = `-- name: GetLogs :many
@@ -733,6 +818,65 @@ func (q *Queries) GetPrompt(ctx context.Context, id int64) (Prompt, error) {
 	return i, err
 }
 
+const getPromptIDsByMessageID = `-- name: GetPromptIDsByMessageID :many
+SELECT DISTINCT prompt_id FROM categorization_history
+WHERE message_id = ? AND prompt_id IS NOT NULL
+`
+
+func (q *Queries) GetPromptIDsByMessageID(ctx context.Context, messageID string) ([]sql.NullInt64, error) {
+	rows, err := q.db.QueryContext(ctx, getPromptIDsByMessageID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []sql.NullInt64
+	for rows.Next() {
+		var prompt_id sql.NullInt64
+		if err := rows.Scan(&prompt_id); err != nil {
+			return nil, err
+		}
+		items = append(items, prompt_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPromptSuggestion = `-- name: GetPromptSuggestion :one
+SELECT id, created_at, updated_at, prompt_id, correction_id, trigger_kind,
+       message_id, email_subject, email_sender, email_body_snapshot,
+       original_instructions, suggested_instructions, conversation_json,
+       user_comment, status
+FROM prompt_suggestions WHERE id = ? LIMIT 1
+`
+
+func (q *Queries) GetPromptSuggestion(ctx context.Context, id int64) (PromptSuggestion, error) {
+	row := q.db.QueryRowContext(ctx, getPromptSuggestion, id)
+	var i PromptSuggestion
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PromptID,
+		&i.CorrectionID,
+		&i.TriggerKind,
+		&i.MessageID,
+		&i.EmailSubject,
+		&i.EmailSender,
+		&i.EmailBodySnapshot,
+		&i.OriginalInstructions,
+		&i.SuggestedInstructions,
+		&i.ConversationJson,
+		&i.UserComment,
+		&i.Status,
+	)
+	return i, err
+}
+
 const getSchemaVersion = `-- name: GetSchemaVersion :one
 
 SELECT version FROM schema_version LIMIT 1
@@ -772,6 +916,81 @@ func (q *Queries) HasGlobalRetention(ctx context.Context, accountID int64) (int6
 	var exists_val int64
 	err := row.Scan(&exists_val)
 	return exists_val, err
+}
+
+const insertEmailCorrection = `-- name: InsertEmailCorrection :one
+
+INSERT INTO email_corrections (account_id, message_id, added_prompts, removed_prompts, current_prompt_ids, note)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id
+`
+
+type InsertEmailCorrectionParams struct {
+	AccountID        int64
+	MessageID        string
+	AddedPrompts     string
+	RemovedPrompts   string
+	CurrentPromptIds string
+	Note             string
+}
+
+// ============================================================
+// Email Corrections
+// ============================================================
+func (q *Queries) InsertEmailCorrection(ctx context.Context, arg InsertEmailCorrectionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertEmailCorrection,
+		arg.AccountID,
+		arg.MessageID,
+		arg.AddedPrompts,
+		arg.RemovedPrompts,
+		arg.CurrentPromptIds,
+		arg.Note,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertPromptSuggestion = `-- name: InsertPromptSuggestion :one
+
+INSERT INTO prompt_suggestions
+    (prompt_id, correction_id, trigger_kind, message_id, email_subject, email_sender, email_body_snapshot, original_instructions, suggested_instructions, conversation_json)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id
+`
+
+type InsertPromptSuggestionParams struct {
+	PromptID              int64
+	CorrectionID          sql.NullInt64
+	TriggerKind           string
+	MessageID             string
+	EmailSubject          string
+	EmailSender           string
+	EmailBodySnapshot     string
+	OriginalInstructions  string
+	SuggestedInstructions string
+	ConversationJson      string
+}
+
+// ============================================================
+// Prompt Suggestions
+// ============================================================
+func (q *Queries) InsertPromptSuggestion(ctx context.Context, arg InsertPromptSuggestionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertPromptSuggestion,
+		arg.PromptID,
+		arg.CorrectionID,
+		arg.TriggerKind,
+		arg.MessageID,
+		arg.EmailSubject,
+		arg.EmailSender,
+		arg.EmailBodySnapshot,
+		arg.OriginalInstructions,
+		arg.SuggestedInstructions,
+		arg.ConversationJson,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const labelRetentionExists = `-- name: LabelRetentionExists :one
@@ -951,6 +1170,54 @@ func (q *Queries) ListActivePromptsByAccount(ctx context.Context, accountID sql.
 			&i.SortOrder,
 			&i.StopProcessing,
 			&i.AccountID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPromptSuggestions = `-- name: ListPromptSuggestions :many
+SELECT id, created_at, updated_at, prompt_id, correction_id, trigger_kind,
+       message_id, email_subject, email_sender, email_body_snapshot,
+       original_instructions, suggested_instructions, conversation_json,
+       user_comment, status
+FROM prompt_suggestions
+ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END ASC, id DESC
+`
+
+func (q *Queries) ListPromptSuggestions(ctx context.Context) ([]PromptSuggestion, error) {
+	rows, err := q.db.QueryContext(ctx, listPromptSuggestions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PromptSuggestion
+	for rows.Next() {
+		var i PromptSuggestion
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PromptID,
+			&i.CorrectionID,
+			&i.TriggerKind,
+			&i.MessageID,
+			&i.EmailSubject,
+			&i.EmailSender,
+			&i.EmailBodySnapshot,
+			&i.OriginalInstructions,
+			&i.SuggestedInstructions,
+			&i.ConversationJson,
+			&i.UserComment,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -1285,6 +1552,20 @@ func (q *Queries) UpdatePrompt(ctx context.Context, arg UpdatePromptParams) erro
 	return err
 }
 
+const updatePromptInstructions = `-- name: UpdatePromptInstructions :exec
+UPDATE prompts SET instructions = ? WHERE id = ?
+`
+
+type UpdatePromptInstructionsParams struct {
+	Instructions string
+	ID           int64
+}
+
+func (q *Queries) UpdatePromptInstructions(ctx context.Context, arg UpdatePromptInstructionsParams) error {
+	_, err := q.db.ExecContext(ctx, updatePromptInstructions, arg.Instructions, arg.ID)
+	return err
+}
+
 const updatePromptSortOrder = `-- name: UpdatePromptSortOrder :exec
 UPDATE prompts SET sort_order = ? WHERE id = ?
 `
@@ -1296,6 +1577,33 @@ type UpdatePromptSortOrderParams struct {
 
 func (q *Queries) UpdatePromptSortOrder(ctx context.Context, arg UpdatePromptSortOrderParams) error {
 	_, err := q.db.ExecContext(ctx, updatePromptSortOrder, arg.SortOrder, arg.ID)
+	return err
+}
+
+const updatePromptSuggestion = `-- name: UpdatePromptSuggestion :exec
+UPDATE prompt_suggestions SET
+    suggested_instructions = ?,
+    conversation_json = ?,
+    user_comment = ?,
+    status = 'pending',
+    updated_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?
+`
+
+type UpdatePromptSuggestionParams struct {
+	SuggestedInstructions string
+	ConversationJson      string
+	UserComment           string
+	ID                    int64
+}
+
+func (q *Queries) UpdatePromptSuggestion(ctx context.Context, arg UpdatePromptSuggestionParams) error {
+	_, err := q.db.ExecContext(ctx, updatePromptSuggestion,
+		arg.SuggestedInstructions,
+		arg.ConversationJson,
+		arg.UserComment,
+		arg.ID,
+	)
 	return err
 }
 

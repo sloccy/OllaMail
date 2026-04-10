@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,6 +149,13 @@ func (s *server) registerRoutes() {
 	s.mux.HandleFunc("GET /fragments/history", s.handleHistory)
 	s.mux.HandleFunc("GET /fragments/history/filters", s.handleHistoryFilters)
 	s.mux.HandleFunc("GET /fragments/history/{id}/llm-response", s.handleHistoryLlmResponse)
+	s.mux.HandleFunc("GET /fragments/history/{id}/recategorize", s.handleRecategorizeForm)
+	s.mux.HandleFunc("POST /fragments/history/{id}/recategorize", s.handleRecategorize)
+	s.mux.HandleFunc("GET /fragments/prompt-suggestions", s.handlePromptSuggestionsList)
+	s.mux.HandleFunc("GET /fragments/prompt-suggestions/{id}", s.handlePromptSuggestionDetail)
+	s.mux.HandleFunc("POST /fragments/prompt-suggestions/{id}/regenerate", s.handlePromptSuggestionRegenerate)
+	s.mux.HandleFunc("POST /fragments/prompt-suggestions/{id}/apply", s.handlePromptSuggestionApply)
+	s.mux.HandleFunc("POST /fragments/prompt-suggestions/{id}/dismiss", s.handlePromptSuggestionDismiss)
 	s.mux.HandleFunc("GET /fragments/retention/{id}", s.handleGetRetention)
 	s.mux.HandleFunc("POST /fragments/retention/{id}", s.handleSetGlobalRetention)
 	s.mux.HandleFunc("POST /fragments/retention/{id}/labels", s.handleAddLabelRetention)
@@ -1120,6 +1128,539 @@ func (s *server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = fmt.Fprintf(w, "data: {\"type\":\"done\"}\n\n")
 	flusher.Flush()
+}
+
+// ============================================================
+// Recategorize
+// ============================================================
+
+type recategorizeFormData struct {
+	HistoryID int64
+	MessageID string
+	AccountID int64
+	Subject   string
+	Sender    string
+	Prompts   []promptCheckbox
+}
+
+type promptCheckbox struct {
+	Prompt  db.Prompt
+	Checked bool
+}
+
+func (s *server) handleRecategorizeForm(w http.ResponseWriter, r *http.Request) {
+	id := pathInt(r, "id")
+	if id == 0 {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	row, err := s.store.GetHistoryRow(ctx, id)
+	if err != nil {
+		http.Error(w, "history row not found", http.StatusNotFound)
+		return
+	}
+
+	currentIDs, err := s.store.GetCurrentPromptIDsForMessage(ctx, row.MessageID)
+	if err != nil {
+		currentIDs = map[int64]bool{}
+	}
+
+	var prompts []db.Prompt
+	if row.AccountID != 0 {
+		prompts, _ = s.store.ListActivePromptsByAccount(ctx, sql.NullInt64{Int64: row.AccountID, Valid: true})
+	} else {
+		prompts, _ = s.store.ListActivePrompts(ctx)
+	}
+
+	checkboxes := make([]promptCheckbox, len(prompts))
+	for i, p := range prompts {
+		checkboxes[i] = promptCheckbox{Prompt: p, Checked: currentIDs[p.ID]}
+	}
+
+	data := recategorizeFormData{
+		HistoryID: id,
+		MessageID: row.MessageID,
+		AccountID: row.AccountID,
+		Subject:   row.Subject,
+		Sender:    row.Sender,
+		Prompts:   checkboxes,
+	}
+	s.fragmentResponse(w, "templates/fragments/recategorize_form.html", data, "")
+}
+
+func (s *server) handleRecategorize(w http.ResponseWriter, r *http.Request) {
+	id := pathInt(r, "id")
+	if id == 0 {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	row, err := s.store.GetHistoryRow(ctx, id)
+	if err != nil {
+		http.Error(w, "history row not found", http.StatusNotFound)
+		return
+	}
+
+	// Build set of newly-requested prompt IDs
+	requested := make(map[int64]bool)
+	for _, v := range r.Form["prompt_ids"] {
+		pid, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			requested[pid] = true
+		}
+	}
+
+	// Build set of prompts to improve
+	improveSet := make(map[int64]bool)
+	for _, v := range r.Form["improve_prompt_ids"] {
+		pid, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			improveSet[pid] = true
+		}
+	}
+
+	note := r.FormValue("note")
+
+	// Current applied prompts
+	currentIDs, _ := s.store.GetCurrentPromptIDsForMessage(ctx, row.MessageID)
+
+	// Load all prompts for this account (to get labels + actions)
+	var allPrompts []db.Prompt
+	if row.AccountID != 0 {
+		allPrompts, _ = s.store.ListActivePromptsByAccount(ctx, sql.NullInt64{Int64: row.AccountID, Valid: true})
+	} else {
+		allPrompts, _ = s.store.ListActivePrompts(ctx)
+	}
+	promptByID := make(map[int64]db.Prompt, len(allPrompts))
+	for _, p := range allPrompts {
+		promptByID[p.ID] = p
+	}
+
+	// Compute diffs
+	var addedIDs, removedIDs []int64
+	for pid := range requested {
+		if !currentIDs[pid] {
+			addedIDs = append(addedIDs, pid)
+		}
+	}
+	for pid := range currentIDs {
+		if !requested[pid] {
+			removedIDs = append(removedIDs, pid)
+		}
+	}
+
+	// Build new current set for storage
+	newCurrentIDs := map[int64]bool{}
+	for pid := range currentIDs {
+		newCurrentIDs[pid] = true
+	}
+	for _, pid := range addedIDs {
+		newCurrentIDs[pid] = true
+	}
+	for _, pid := range removedIDs {
+		delete(newCurrentIDs, pid)
+	}
+
+	// Apply Gmail changes if we have an account
+	account, gmailErr := s.store.GetAccount(ctx, row.AccountID)
+	var svc *gmail.Client
+	if gmailErr == nil && row.AccountID != 0 {
+		oauthCfg, cfgErr := s.auth.ConfigFromFile()
+		if cfgErr == nil {
+			svc, _ = gmail.NewService(ctx, account.CredentialsJson, oauthCfg, func(newCreds string) {
+				_ = s.store.UpdateAccountCredentials(ctx, db.UpdateAccountCredentialsParams{
+					CredentialsJson: newCreds, ID: account.ID,
+				})
+			})
+		}
+	}
+
+	if svc != nil && (len(addedIDs) > 0 || len(removedIDs) > 0) {
+		var neededLabels []string
+		for _, pid := range addedIDs {
+			if p, ok := promptByID[pid]; ok && p.LabelName != "" {
+				neededLabels = append(neededLabels, p.LabelName)
+			}
+		}
+		labelCache, _ := gmail.BuildLabelCache(ctx, svc, neededLabels)
+
+		// Apply added prompts
+		var addModifies []gmail.Modify
+		for _, pid := range addedIDs {
+			p, ok := promptByID[pid]
+			if !ok {
+				continue
+			}
+			mod := gmail.Modify{MessageIDs: []string{row.MessageID}}
+			if p.LabelName != "" {
+				if labelID, ok := labelCache[p.LabelName]; ok {
+					mod.AddLabels = append(mod.AddLabels, labelID)
+				}
+			}
+			if p.ActionSpam != 0 {
+				mod.AddLabels = append(mod.AddLabels, gmail.LabelSpam)
+				mod.RemoveLabels = append(mod.RemoveLabels, gmail.LabelInbox)
+			} else if p.ActionArchive != 0 {
+				mod.RemoveLabels = append(mod.RemoveLabels, gmail.LabelInbox)
+			}
+			if p.ActionMarkRead != 0 {
+				mod.RemoveLabels = append(mod.RemoveLabels, gmail.LabelUnread)
+			}
+			if len(mod.AddLabels) > 0 || len(mod.RemoveLabels) > 0 {
+				addModifies = append(addModifies, mod)
+			}
+		}
+		if len(addModifies) > 0 {
+			_ = gmail.BatchModifyEmails(ctx, svc, addModifies)
+		}
+
+		// Reverse removed prompts
+		var removeModifies []gmail.Modify
+		var trashReverseIDs []string
+		for _, pid := range removedIDs {
+			p, ok := promptByID[pid]
+			if !ok {
+				continue
+			}
+			mod := gmail.Modify{MessageIDs: []string{row.MessageID}}
+			if p.LabelName != "" {
+				if labelID, ok := labelCache[p.LabelName]; ok {
+					mod.RemoveLabels = append(mod.RemoveLabels, labelID)
+				}
+			}
+			switch {
+			case p.ActionSpam != 0:
+				mod.RemoveLabels = append(mod.RemoveLabels, gmail.LabelSpam)
+				mod.AddLabels = append(mod.AddLabels, gmail.LabelInbox)
+			case p.ActionTrash != 0:
+				// Untrash: remove TRASH, add INBOX
+				trashReverseIDs = append(trashReverseIDs, row.MessageID)
+			case p.ActionArchive != 0:
+				mod.AddLabels = append(mod.AddLabels, gmail.LabelInbox)
+			}
+			if p.ActionMarkRead != 0 {
+				mod.AddLabels = append(mod.AddLabels, gmail.LabelUnread)
+			}
+			if len(mod.AddLabels) > 0 || len(mod.RemoveLabels) > 0 {
+				removeModifies = append(removeModifies, mod)
+			}
+		}
+		if len(removeModifies) > 0 {
+			_ = gmail.BatchModifyEmails(ctx, svc, removeModifies)
+		}
+		if len(trashReverseIDs) > 0 {
+			_ = gmail.BatchModifyEmails(ctx, svc, []gmail.Modify{{
+				MessageIDs:   trashReverseIDs,
+				AddLabels:    []string{gmail.LabelInbox},
+				RemoveLabels: []string{gmail.LabelTrash},
+			}})
+		}
+	}
+
+	// Record history entries for audit
+	var histEntries []db.HistoryEntry
+	for _, pid := range addedIDs {
+		if p, ok := promptByID[pid]; ok {
+			histEntries = append(histEntries, db.HistoryEntry{
+				AccountID:    row.AccountID,
+				AccountEmail: row.AccountEmail,
+				MessageID:    row.MessageID,
+				Subject:      row.Subject,
+				Sender:       row.Sender,
+				PromptID:     sql.NullInt64{Int64: p.ID, Valid: true},
+				PromptName:   sql.NullString{String: p.Name, Valid: true},
+				LabelName:    sql.NullString{String: p.LabelName, Valid: p.LabelName != ""},
+				Actions:      "manual:added",
+			})
+		}
+	}
+	for _, pid := range removedIDs {
+		if p, ok := promptByID[pid]; ok {
+			histEntries = append(histEntries, db.HistoryEntry{
+				AccountID:    row.AccountID,
+				AccountEmail: row.AccountEmail,
+				MessageID:    row.MessageID,
+				Subject:      row.Subject,
+				Sender:       row.Sender,
+				PromptID:     sql.NullInt64{Int64: p.ID, Valid: true},
+				PromptName:   sql.NullString{String: p.Name, Valid: true},
+				LabelName:    sql.NullString{String: p.LabelName, Valid: p.LabelName != ""},
+				Actions:      "manual:removed",
+			})
+		}
+	}
+	for _, h := range histEntries {
+		_ = s.store.AddHistory(ctx, db.AddHistoryParams(h))
+	}
+
+	// Build CSV of new current prompt IDs
+	var newCurrentSlice []string
+	for pid := range newCurrentIDs {
+		newCurrentSlice = append(newCurrentSlice, strconv.FormatInt(pid, 10))
+	}
+
+	var addedCSV, removedCSV []string
+	for _, pid := range addedIDs {
+		addedCSV = append(addedCSV, strconv.FormatInt(pid, 10))
+	}
+	for _, pid := range removedIDs {
+		removedCSV = append(removedCSV, strconv.FormatInt(pid, 10))
+	}
+
+	correctionID, corrErr := s.store.InsertEmailCorrection(ctx, db.InsertEmailCorrectionParams{
+		AccountID:        row.AccountID,
+		MessageID:        row.MessageID,
+		AddedPrompts:     strings.Join(addedCSV, ","),
+		RemovedPrompts:   strings.Join(removedCSV, ","),
+		CurrentPromptIds: strings.Join(newCurrentSlice, ","),
+		Note:             note,
+	})
+
+	// Kick off AI improvement for flagged prompts
+	if len(improveSet) > 0 && svc != nil {
+		msg, fetchErr := gmail.FetchMessage(ctx, svc, row.MessageID, 0)
+		if fetchErr == nil {
+			for pid := range improveSet {
+				p, ok := promptByID[pid]
+				if !ok {
+					continue
+				}
+				isAdded := slices.Contains(addedIDs, pid)
+				triggerKind := "false_positive"
+				if isAdded {
+					triggerKind = "false_negative"
+				}
+
+				suggested, conv, llmErr := s.ollama.ImprovePromptInstructions(ctx, llm.ImproveRequest{
+					PromptName:           p.Name,
+					LabelName:            p.LabelName,
+					OriginalInstructions: p.Instructions,
+					TriggerKind:          triggerKind,
+					EmailSubject:         row.Subject,
+					EmailSender:          row.Sender,
+					EmailBody:            msg.Body,
+				})
+				if llmErr != nil {
+					slog.Error("improve prompt", "prompt_id", pid, "err", llmErr)
+					continue
+				}
+
+				convJSON, _ := json.Marshal(conv) //nolint:errchkjson // []ChatMessage cannot fail
+
+				var corrID sql.NullInt64
+				if corrErr == nil {
+					corrID = sql.NullInt64{Int64: correctionID, Valid: true}
+				}
+
+				_, _ = s.store.InsertPromptSuggestion(ctx, db.InsertPromptSuggestionParams{
+					PromptID:              p.ID,
+					CorrectionID:          corrID,
+					TriggerKind:           triggerKind,
+					MessageID:             row.MessageID,
+					EmailSubject:          row.Subject,
+					EmailSender:           row.Sender,
+					EmailBodySnapshot:     msg.Body,
+					OriginalInstructions:  p.Instructions,
+					SuggestedInstructions: suggested,
+					ConversationJson:      string(convJSON),
+				})
+			}
+		}
+	}
+
+	w.Header().Set("HX-Trigger", `{"showToast":{"message":"Recategorization applied","type":"success"},"closeModal":"recategorize-modal","refreshSuggestionBadge":"1"}`)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+}
+
+// ============================================================
+// Prompt Suggestions
+// ============================================================
+
+type suggestionView struct {
+	ID                    int64
+	CreatedAt             string
+	UpdatedAt             string
+	PromptID              int64
+	PromptName            string
+	TriggerKind           string
+	EmailSubject          string
+	EmailSender           string
+	EmailBodySnapshot     string
+	OriginalInstructions  string
+	SuggestedInstructions string
+	UserComment           string
+	Status                string
+}
+
+func (s *server) handlePromptSuggestionsList(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	suggestions, _ := s.store.ListPromptSuggestions(ctx)
+
+	// Load all prompts for name lookup
+	allPrompts, _ := s.store.ListPrompts(ctx)
+	promptNames := make(map[int64]string, len(allPrompts))
+	for _, p := range allPrompts {
+		promptNames[p.ID] = p.Name
+	}
+
+	views := make([]suggestionView, len(suggestions))
+	for i, sg := range suggestions {
+		views[i] = suggestionView{
+			ID:                    sg.ID,
+			CreatedAt:             sg.CreatedAt,
+			UpdatedAt:             sg.UpdatedAt,
+			PromptID:              sg.PromptID,
+			PromptName:            promptNames[sg.PromptID],
+			TriggerKind:           sg.TriggerKind,
+			EmailSubject:          sg.EmailSubject,
+			EmailSender:           sg.EmailSender,
+			EmailBodySnapshot:     sg.EmailBodySnapshot,
+			OriginalInstructions:  sg.OriginalInstructions,
+			SuggestedInstructions: sg.SuggestedInstructions,
+			UserComment:           sg.UserComment,
+			Status:                sg.Status,
+		}
+	}
+	s.fragmentResponse(w, "templates/fragments/prompt_suggestions_list.html", views, "")
+}
+
+func (s *server) handlePromptSuggestionDetail(w http.ResponseWriter, r *http.Request) {
+	id := pathInt(r, "id")
+	if id == 0 {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	sg, err := s.store.GetPromptSuggestion(ctx, id)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	p, _ := s.store.GetPrompt(ctx, sg.PromptID)
+	view := suggestionView{
+		ID:                    sg.ID,
+		CreatedAt:             sg.CreatedAt,
+		UpdatedAt:             sg.UpdatedAt,
+		PromptID:              sg.PromptID,
+		PromptName:            p.Name,
+		TriggerKind:           sg.TriggerKind,
+		EmailSubject:          sg.EmailSubject,
+		EmailSender:           sg.EmailSender,
+		EmailBodySnapshot:     sg.EmailBodySnapshot,
+		OriginalInstructions:  sg.OriginalInstructions,
+		SuggestedInstructions: sg.SuggestedInstructions,
+		UserComment:           sg.UserComment,
+		Status:                sg.Status,
+	}
+	s.fragmentResponse(w, "templates/fragments/prompt_suggestion_detail.html", view, "")
+}
+
+func (s *server) handlePromptSuggestionRegenerate(w http.ResponseWriter, r *http.Request) {
+	id := pathInt(r, "id")
+	if id == 0 {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	userComment := r.FormValue("user_comment")
+
+	sg, err := s.store.GetPromptSuggestion(ctx, id)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	p, err := s.store.GetPrompt(ctx, sg.PromptID)
+	if err != nil {
+		http.Error(w, "prompt not found", http.StatusNotFound)
+		return
+	}
+
+	var conv []llm.ChatMessage
+	if sg.ConversationJson != "" && sg.ConversationJson != "[]" {
+		_ = json.Unmarshal([]byte(sg.ConversationJson), &conv)
+	}
+
+	suggested, newConv, llmErr := s.ollama.ImprovePromptInstructions(ctx, llm.ImproveRequest{
+		PromptName:           p.Name,
+		LabelName:            p.LabelName,
+		OriginalInstructions: sg.OriginalInstructions,
+		TriggerKind:          sg.TriggerKind,
+		EmailSubject:         sg.EmailSubject,
+		EmailSender:          sg.EmailSender,
+		EmailBody:            sg.EmailBodySnapshot,
+		PriorConversation:    conv,
+		UserComment:          userComment,
+	})
+	if llmErr != nil {
+		http.Error(w, "AI error: "+llmErr.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	convJSON, _ := json.Marshal(newConv) //nolint:errchkjson // []ChatMessage cannot fail
+	_ = s.store.UpdatePromptSuggestion(ctx, db.UpdatePromptSuggestionParams{
+		SuggestedInstructions: suggested,
+		ConversationJson:      string(convJSON),
+		UserComment:           userComment,
+		ID:                    id,
+	})
+
+	view := suggestionView{
+		ID:                    sg.ID,
+		CreatedAt:             sg.CreatedAt,
+		UpdatedAt:             db.Now(),
+		PromptID:              sg.PromptID,
+		PromptName:            p.Name,
+		TriggerKind:           sg.TriggerKind,
+		EmailSubject:          sg.EmailSubject,
+		EmailSender:           sg.EmailSender,
+		EmailBodySnapshot:     sg.EmailBodySnapshot,
+		OriginalInstructions:  sg.OriginalInstructions,
+		SuggestedInstructions: suggested,
+		UserComment:           userComment,
+		Status:                "pending",
+	}
+	s.fragmentResponse(w, "templates/fragments/prompt_suggestion_detail.html", view, "")
+}
+
+func (s *server) handlePromptSuggestionApply(w http.ResponseWriter, r *http.Request) {
+	id := pathInt(r, "id")
+	if id == 0 {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	sg, err := s.store.GetPromptSuggestion(ctx, id)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err := s.store.ApplyPromptSuggestionAndUpdatePrompt(ctx, id, sg.PromptID, sg.SuggestedInstructions); err != nil {
+		http.Error(w, "apply failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Re-render the suggestions list
+	s.handlePromptSuggestionsList(w, r)
+}
+
+func (s *server) handlePromptSuggestionDismiss(w http.ResponseWriter, r *http.Request) {
+	id := pathInt(r, "id")
+	if id == 0 {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	_ = s.store.DismissPromptSuggestion(ctx, id)
+	s.handlePromptSuggestionsList(w, r)
 }
 
 // ============================================================

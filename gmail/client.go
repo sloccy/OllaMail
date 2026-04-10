@@ -365,6 +365,15 @@ func IterMessageDetails(ctx context.Context, svc *Client, ids []string, maxBodyC
 	return msgCh, errCh
 }
 
+// FetchMessage retrieves a single message's subject, sender, and body by ID.
+// maxBodyChars limits the body length; pass 0 to use the default (4000 chars).
+func FetchMessage(ctx context.Context, svc *Client, id string, maxBodyChars int) (Message, error) {
+	if maxBodyChars <= 0 {
+		maxBodyChars = 4000
+	}
+	return fetchMessage(ctx, svc, id, maxBodyChars)
+}
+
 func fetchMessage(ctx context.Context, svc *Client, id string, maxBodyChars int) (Message, error) {
 	var m apiMessage
 	if err := svc.get(ctx, "/messages/"+id, url.Values{"format": {"full"}}, &m); err != nil {

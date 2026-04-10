@@ -74,6 +74,7 @@ func (s *Store) Migrate() error {
 
 	migrations := []func(context.Context) error{
 		s.migration001,
+		s.migration002,
 	}
 
 	for i, m := range migrations {
@@ -102,6 +103,45 @@ func (s *Store) migration001(ctx context.Context) error {
 		`ALTER TABLE categorization_history ADD COLUMN llm_response TEXT NOT NULL DEFAULT ''`)
 	if err != nil && !isSQLiteAlreadyExists(err) {
 		return err
+	}
+	return nil
+}
+
+// migration002 adds email_corrections and prompt_suggestions tables.
+func (s *Store) migration002(ctx context.Context) error {
+	ddls := []string{
+		`CREATE TABLE IF NOT EXISTS email_corrections (
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now')),
+			account_id       INTEGER NOT NULL,
+			message_id       TEXT NOT NULL,
+			added_prompts    TEXT NOT NULL DEFAULT '',
+			removed_prompts  TEXT NOT NULL DEFAULT '',
+			current_prompt_ids TEXT NOT NULL DEFAULT '',
+			note             TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE TABLE IF NOT EXISTS prompt_suggestions (
+			id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now')),
+			updated_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now')),
+			prompt_id             INTEGER NOT NULL,
+			correction_id         INTEGER,
+			trigger_kind          TEXT NOT NULL DEFAULT 'false_negative',
+			message_id            TEXT NOT NULL DEFAULT '',
+			email_subject         TEXT NOT NULL DEFAULT '',
+			email_sender          TEXT NOT NULL DEFAULT '',
+			email_body_snapshot   TEXT NOT NULL DEFAULT '',
+			original_instructions TEXT NOT NULL DEFAULT '',
+			suggested_instructions TEXT NOT NULL DEFAULT '',
+			conversation_json     TEXT NOT NULL DEFAULT '[]',
+			user_comment          TEXT NOT NULL DEFAULT '',
+			status                TEXT NOT NULL DEFAULT 'pending'
+		)`,
+	}
+	for _, ddl := range ddls {
+		if _, err := s.db.ExecContext(ctx, ddl); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -375,6 +415,75 @@ func (s *Store) BatchInsertProcessingResults(ctx context.Context, logs []LogEntr
 		return err
 	}
 	return tx.Commit()
+}
+
+// ============================================================
+// Prompt suggestion helpers
+// ============================================================
+
+// ApplyPromptSuggestionAndUpdatePrompt updates prompt.instructions and marks the suggestion
+// as applied in a single transaction.
+func (s *Store) ApplyPromptSuggestionAndUpdatePrompt(ctx context.Context, suggestionID int64, promptID int64, newInstructions string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := s.WithTx(tx)
+	if err := q.UpdatePromptInstructions(ctx, UpdatePromptInstructionsParams{
+		Instructions: newInstructions,
+		ID:           promptID,
+	}); err != nil {
+		return err
+	}
+	if err := q.ApplyPromptSuggestion(ctx, suggestionID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// GetCurrentPromptIDsForMessage returns the set of prompt IDs currently considered
+// applied to the given message. It uses the most recent email_correction if one exists;
+// otherwise falls back to the original history rows.
+func (s *Store) GetCurrentPromptIDsForMessage(ctx context.Context, messageID string) (map[int64]bool, error) {
+	correction, err := s.GetLatestCorrectionForMessage(ctx, messageID)
+	if err == nil && correction.CurrentPromptIds != "" {
+		set := make(map[int64]bool)
+		for _, part := range splitCSV(correction.CurrentPromptIds) {
+			var id int64
+			if _, scanErr := fmt.Sscanf(part, "%d", &id); scanErr == nil {
+				set[id] = true
+			}
+		}
+		return set, nil
+	}
+	// Fall back to original history rows
+	nullIDs, err := s.GetPromptIDsByMessageID(ctx, messageID)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[int64]bool)
+	for _, nid := range nullIDs {
+		if nid.Valid {
+			set[nid.Int64] = true
+		}
+	}
+	return set, nil
+}
+
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ============================================================
