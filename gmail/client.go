@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -146,7 +147,9 @@ type apiListMessagesResponse struct {
 }
 
 type apiMessagePartBody struct {
-	Data string `json:"data"`
+	Data         string `json:"data"`
+	AttachmentID string `json:"attachmentId"`
+	Size         int    `json:"size"`
 }
 
 type apiMessagePart struct {
@@ -392,32 +395,46 @@ func fetchMessage(ctx context.Context, svc *Client, id string, maxBodyChars int)
 				msg.Subject = h.Value
 			}
 		}
-		msg.Body = extractPayloadBody(m.Payload, maxBodyChars)
+		msg.Body = extractPayloadBody(ctx, svc, id, m.Payload, maxBodyChars)
 	}
 	return msg, nil
 }
 
-func extractPayloadBody(payload *apiMessagePart, maxChars int) string {
+func extractPayloadBody(ctx context.Context, svc *Client, msgID string, payload *apiMessagePart, maxChars int) string {
 	if payload == nil {
 		return ""
 	}
-	return Truncate(extractBodyRecursive(payload, maxChars*3), maxChars)
+	return Truncate(extractBodyRecursive(ctx, svc, msgID, payload, maxChars*3), maxChars)
 }
 
-func extractBodyRecursive(part *apiMessagePart, maxChars int) string {
+func extractBodyRecursive(ctx context.Context, svc *Client, msgID string, part *apiMessagePart, maxChars int) string {
 	if part == nil {
 		return ""
 	}
 	mimeType := strings.ToLower(part.MimeType)
 
 	if len(part.Parts) == 0 {
-		// Leaf node
-		if part.Body == nil || part.Body.Data == "" {
+		// Leaf node — get the raw base64 data, fetching via attachment API if not inline
+		rawData := ""
+		if part.Body != nil {
+			rawData = part.Body.Data
+			if rawData == "" && part.Body.AttachmentID != "" {
+				var att struct {
+					Data string `json:"data"`
+				}
+				if err := svc.get(ctx, "/messages/"+msgID+"/attachments/"+part.Body.AttachmentID, nil, &att); err != nil {
+					slog.Debug("attachment fetch failed", "msg", msgID, "att", part.Body.AttachmentID, "err", err)
+				} else {
+					rawData = att.Data
+				}
+			}
+		}
+		if rawData == "" {
 			return ""
 		}
-		data, err := base64.URLEncoding.DecodeString(part.Body.Data)
+		data, err := base64.URLEncoding.DecodeString(rawData)
 		if err != nil {
-			data, err = base64.StdEncoding.DecodeString(part.Body.Data)
+			data, err = base64.StdEncoding.DecodeString(rawData)
 			if err != nil {
 				return ""
 			}
@@ -432,14 +449,14 @@ func extractBodyRecursive(part *apiMessagePart, maxChars int) string {
 	// Prefer text/plain part
 	for _, p := range part.Parts {
 		if strings.Contains(strings.ToLower(p.MimeType), "plain") {
-			if t := extractBodyRecursive(&p, maxChars); t != "" {
+			if t := extractBodyRecursive(ctx, svc, msgID, &p, maxChars); t != "" {
 				return t
 			}
 		}
 	}
 	// Fallback to any part
 	for _, p := range part.Parts {
-		if t := extractBodyRecursive(&p, maxChars); t != "" {
+		if t := extractBodyRecursive(ctx, svc, msgID, &p, maxChars); t != "" {
 			return t
 		}
 	}

@@ -17,10 +17,8 @@
         {{end}}
       </div>
     </div>
-    <button class="btn btn-outline-secondary btn-sm"
-      hx-get="/fragments/prompt-suggestions"
-      hx-target="#suggestion-detail-container"
-      hx-swap="innerHTML">
+    <button type="button" class="btn btn-outline-secondary btn-sm"
+      onclick="document.getElementById('suggestion-detail-container').innerHTML=''">
       &larr; Back to list
     </button>
   </div>
