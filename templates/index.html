@@ -26,6 +26,7 @@
         <li><a data-page="logs" href="#logs"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6" stroke-linecap="round"/></svg></span> Logs</a></li>
         <li><a data-page="history" href="#history"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> History</a></li>
         <li><a data-page="retention" href="#retention"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v7h10V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.5h4" stroke-linecap="round"/></svg></span> Retention</a></li>
+        <li><a data-page="prompt-suggestions" href="#prompt-suggestions" id="nav-prompt-suggestions"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h12v9H2z" rx="1" stroke-linejoin="round"/><path d="M5 6h6M5 8.5h4" stroke-linecap="round"/></svg></span> Prompt Updates <span class="badge text-bg-primary rounded-pill ms-1 d-none" id="suggestions-badge"></span></a></li>
       </ul>
     </nav>
     <div class="sidebar-footer mt-auto pt-3 border-top">
@@ -330,7 +331,32 @@
         hx-swap="innerHTML"></div>
     </div>
 
+    <!-- Prompt Suggestions -->
+    <div class="page" id="page-prompt-suggestions">
+      <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom">
+        <div><h2 class="fw-bold mb-1">Prompt Updates</h2><div class="small text-muted">AI-suggested improvements from manual corrections</div></div>
+      </div>
+      <div id="suggestions-list-container"
+        hx-get="/fragments/prompt-suggestions"
+        hx-trigger="intersect once, refreshSuggestions from:window"
+        hx-swap="innerHTML">
+        <div class="d-flex flex-column gap-3">
+          <div class="skeleton rounded-3" style="height:4rem"></div>
+          <div class="skeleton rounded-3" style="height:4rem"></div>
+        </div>
+      </div>
+      <div id="suggestion-detail-container" class="mt-4"></div>
+    </div>
+
   </main>
+</div>
+
+<!-- Recategorize Modal -->
+<div class="modal fade" id="recategorize-modal" tabindex="-1" aria-labelledby="recategorize-modal-label" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" id="recategorize-modal-body">
+    </div>
+  </div>
 </div>
 
 <!-- Toast -->
