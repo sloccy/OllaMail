@@ -446,21 +446,16 @@ func extractBodyRecursive(ctx context.Context, svc *Client, msgID string, part *
 		return Truncate(text, maxChars)
 	}
 
-	// Prefer text/plain part
+	// Return the longest candidate across all child parts. Marketing emails
+	// often have a tiny text/plain stub while the real content is in text/html;
+	// preferring by length avoids returning a single-line preheader.
+	var best string
 	for _, p := range part.Parts {
-		if strings.Contains(strings.ToLower(p.MimeType), "plain") {
-			if t := extractBodyRecursive(ctx, svc, msgID, &p, maxChars); t != "" {
-				return t
-			}
+		if t := extractBodyRecursive(ctx, svc, msgID, &p, maxChars); len(t) > len(best) {
+			best = t
 		}
 	}
-	// Fallback to any part
-	for _, p := range part.Parts {
-		if t := extractBodyRecursive(ctx, svc, msgID, &p, maxChars); t != "" {
-			return t
-		}
-	}
-	return ""
+	return best
 }
 
 // Modify represents a set of label changes to apply to messages.
