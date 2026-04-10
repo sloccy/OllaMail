@@ -322,6 +322,98 @@ func (c *Client) streamGenerate(ctx context.Context, description string, ch chan
 }
 
 // ============================================================
+// Prompt Improvement
+// ============================================================
+
+// ChatMessage is a single turn in a conversation.
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// ImproveRequest carries everything needed to generate an improved prompt instruction.
+type ImproveRequest struct {
+	PromptName           string
+	LabelName            string
+	OriginalInstructions string
+	TriggerKind          string // "false_negative" | "false_positive"
+	EmailSubject         string
+	EmailSender          string
+	EmailBody            string
+	PriorConversation    []ChatMessage
+	UserComment          string
+}
+
+const improveSystemPrompt = `You are a careful editor of email-classification rules. You are given one existing rule (its name, target Gmail label, and current instructions) and one concrete email that the rule handled incorrectly. Your job is to rewrite the instructions so that the same rule would have handled this email correctly, without damaging its behavior on emails it currently classifies correctly.
+
+Rules for rewriting:
+1. Preserve the rule's original intent. Do not widen scope beyond what the name and label imply. Do not turn a narrow rule into a catch-all.
+2. Never use the specific sender address, subject line, or body phrases of the example email as matching criteria. The example is an illustration, not a fingerprint. Match on meaning, purpose, and context.
+3. If trigger_kind is false_negative: explain what category of email was missed and add language that would match it. If trigger_kind is false_positive: add exclusions or clarify the scope so emails like this one are no longer matched.
+4. Keep the output 2-6 sentences. Plain prose. No bullet lists, no code blocks, no markdown headings, no preamble like "Here is the updated rule". Output ONLY the new instructions text.
+5. If the user comments on your suggestion, treat the comment as authoritative feedback and produce another revision that addresses it while still obeying rules 1-4.`
+
+// ImprovePromptInstructions calls the LLM to rewrite a prompt's instructions based on
+// a misclassification example. It returns the revised text, the full conversation (for
+// subsequent iterations), and any error.
+func (c *Client) ImprovePromptInstructions(ctx context.Context, req ImproveRequest) (string, []ChatMessage, error) {
+	messages := []map[string]string{{"role": "system", "content": improveSystemPrompt}}
+
+	if len(req.PriorConversation) > 0 {
+		for _, m := range req.PriorConversation {
+			messages = append(messages, map[string]string{"role": m.Role, "content": m.Content})
+		}
+		// Append latest user comment
+		messages = append(messages, map[string]string{
+			"role":    "user",
+			"content": req.UserComment,
+		})
+	} else {
+		userMsg := fmt.Sprintf(
+			"RULE NAME: %s\nTARGET LABEL: %s\nTRIGGER: %s\n\nCURRENT INSTRUCTIONS:\n%s\n\nMISHANDLED EMAIL:\nFrom: %s\nSubject: %s\nBody:\n%s\n\nRewrite the instructions per the system rules.",
+			req.PromptName, req.LabelName, req.TriggerKind,
+			req.OriginalInstructions,
+			req.EmailSender, req.EmailSubject, req.EmailBody,
+		)
+		messages = append(messages, map[string]string{"role": "user", "content": userMsg})
+	}
+
+	payload := map[string]any{
+		"model":    c.model,
+		"messages": messages,
+		"stream":   false,
+		"options": map[string]any{
+			"temperature": 0.4,
+			"num_predict": 512,
+			"num_ctx":     c.numCtx,
+		},
+	}
+
+	raw, err := c.doChat(ctx, payload)
+	if err != nil {
+		return "", nil, err
+	}
+	suggestion := strings.TrimSpace(raw)
+
+	// Build updated conversation for storage
+	var conv []ChatMessage
+	conv = append(conv, req.PriorConversation...)
+	if len(req.PriorConversation) > 0 {
+		conv = append(conv, ChatMessage{Role: "user", Content: req.UserComment})
+	} else {
+		conv = append(conv, ChatMessage{Role: "user", Content: fmt.Sprintf(
+			"RULE NAME: %s\nTARGET LABEL: %s\nTRIGGER: %s\n\nCURRENT INSTRUCTIONS:\n%s\n\nMISHANDLED EMAIL:\nFrom: %s\nSubject: %s\nBody:\n%s\n\nRewrite the instructions per the system rules.",
+			req.PromptName, req.LabelName, req.TriggerKind,
+			req.OriginalInstructions,
+			req.EmailSender, req.EmailSubject, req.EmailBody,
+		)})
+	}
+	conv = append(conv, ChatMessage{Role: "assistant", Content: suggestion})
+
+	return suggestion, conv, nil
+}
+
+// ============================================================
 // Internal
 // ============================================================
 

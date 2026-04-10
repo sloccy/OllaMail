@@ -295,6 +295,56 @@ document.body.addEventListener('showToast', function(e) {
   if (message) toast(message, type || 'success');
 });
 
+// ---- Recategorize modal: "changed" detection + "Improve" checkbox toggle ----
+function recategorizeToggle(checkbox) {
+  const row = checkbox.closest('.recategorize-row');
+  if (!row) return;
+  const initialChecked = checkbox.defaultChecked;
+  const changed = checkbox.checked !== initialChecked;
+  const improveWrap = row.querySelector('.improve-check-wrap');
+  if (improveWrap) {
+    improveWrap.classList.toggle('d-none', !changed);
+    if (!changed) {
+      const improveCheck = improveWrap.querySelector('input[type="checkbox"]');
+      if (improveCheck) improveCheck.checked = false;
+    }
+  }
+}
+
+// ---- Suggestions badge ----
+function _refreshSuggestionsBadge() {
+  fetch('/fragments/prompt-suggestions')
+    .then(r => r.text())
+    .then(html => {
+      const count = (html.match(/class="suggestion-card"/g) || []).filter((_, i, a) => true).length;
+      const badge = document.getElementById('suggestions-badge');
+      if (!badge) return;
+      if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('d-none');
+      } else {
+        badge.classList.add('d-none');
+      }
+    }).catch(() => {});
+}
+
+document.body.addEventListener('refreshSuggestionBadge', _refreshSuggestionsBadge);
+window.addEventListener('refreshSuggestions', function() {
+  _refreshSuggestionsBadge();
+  // Reload suggestions list if on that page
+  const listContainer = document.getElementById('suggestions-list-container');
+  if (listContainer && document.getElementById('page-prompt-suggestions').classList.contains('active')) {
+    htmx.ajax('GET', '/fragments/prompt-suggestions', { target: '#suggestions-list-container', swap: 'innerHTML' });
+  }
+});
+
+document.body.addEventListener('closeModal', function(e) {
+  const modalId = typeof e.detail === 'string' ? e.detail : (e.detail && e.detail.value);
+  if (!modalId) return;
+  const el = document.getElementById(modalId);
+  if (el) bootstrap.Modal.getInstance(el)?.hide();
+});
+
 document.body.addEventListener('closeOAuthPanel', function() {
   document.getElementById('add-account-panel').classList.add('d-none');
   const step2 = document.getElementById('oauth-step-2-body');

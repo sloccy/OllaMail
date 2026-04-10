@@ -28,6 +28,13 @@
           <span class="llm-content"></span>
         </details>
         {{end}}
+        <button class="btn btn-outline-secondary btn-sm py-0 px-1 mt-1" style="font-size:.7rem;"
+          hx-get="/fragments/history/{{.ID}}/recategorize"
+          hx-target="#recategorize-modal-body"
+          hx-swap="innerHTML"
+          hx-on::after-request="new bootstrap.Modal(document.getElementById('recategorize-modal')).show()">
+          ✏ Recategorize
+        </button>
       </div>
     </td>
   </tr>

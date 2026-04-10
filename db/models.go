@@ -37,6 +37,17 @@ type CategorizationHistory struct {
 	LlmResponse  string
 }
 
+type EmailCorrection struct {
+	ID               int64
+	CreatedAt        string
+	AccountID        int64
+	MessageID        string
+	AddedPrompts     string
+	RemovedPrompts   string
+	CurrentPromptIds string
+	Note             string
+}
+
 type LabelExemption struct {
 	ID        int64
 	AccountID int64
@@ -78,6 +89,24 @@ type Prompt struct {
 	SortOrder      int64
 	StopProcessing int64
 	AccountID      sql.NullInt64
+}
+
+type PromptSuggestion struct {
+	ID                    int64
+	CreatedAt             string
+	UpdatedAt             string
+	PromptID              int64
+	CorrectionID          sql.NullInt64
+	TriggerKind           string
+	MessageID             string
+	EmailSubject          string
+	EmailSender           string
+	EmailBodySnapshot     string
+	OriginalInstructions  string
+	SuggestedInstructions string
+	ConversationJson      string
+	UserComment           string
+	Status                string
 }
 
 type SchemaVersion struct {

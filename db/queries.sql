@@ -286,6 +286,83 @@ DELETE FROM label_exemptions WHERE account_id = ?;
 DELETE FROM processed_emails WHERE account_id = ?;
 
 -- ============================================================
+-- Categorization History (additional)
+-- ============================================================
+
+-- name: GetHistoryRow :one
+SELECT id, timestamp, account_id, account_email, message_id, subject, sender,
+       prompt_id, prompt_name, label_name, actions, llm_response
+FROM categorization_history WHERE id = ? LIMIT 1;
+
+-- name: GetPromptIDsByMessageID :many
+SELECT DISTINCT prompt_id FROM categorization_history
+WHERE message_id = ? AND prompt_id IS NOT NULL;
+
+-- ============================================================
+-- Email Corrections
+-- ============================================================
+
+-- name: InsertEmailCorrection :one
+INSERT INTO email_corrections (account_id, message_id, added_prompts, removed_prompts, current_prompt_ids, note)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id;
+
+-- name: GetLatestCorrectionForMessage :one
+SELECT id, created_at, account_id, message_id, added_prompts, removed_prompts, current_prompt_ids, note
+FROM email_corrections
+WHERE message_id = ?
+ORDER BY id DESC
+LIMIT 1;
+
+-- ============================================================
+-- Prompt Suggestions
+-- ============================================================
+
+-- name: InsertPromptSuggestion :one
+INSERT INTO prompt_suggestions
+    (prompt_id, correction_id, trigger_kind, message_id, email_subject, email_sender, email_body_snapshot, original_instructions, suggested_instructions, conversation_json)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id;
+
+-- name: GetPromptSuggestion :one
+SELECT id, created_at, updated_at, prompt_id, correction_id, trigger_kind,
+       message_id, email_subject, email_sender, email_body_snapshot,
+       original_instructions, suggested_instructions, conversation_json,
+       user_comment, status
+FROM prompt_suggestions WHERE id = ? LIMIT 1;
+
+-- name: ListPromptSuggestions :many
+SELECT id, created_at, updated_at, prompt_id, correction_id, trigger_kind,
+       message_id, email_subject, email_sender, email_body_snapshot,
+       original_instructions, suggested_instructions, conversation_json,
+       user_comment, status
+FROM prompt_suggestions
+ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END ASC, id DESC;
+
+-- name: UpdatePromptSuggestion :exec
+UPDATE prompt_suggestions SET
+    suggested_instructions = ?,
+    conversation_json = ?,
+    user_comment = ?,
+    status = 'pending',
+    updated_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?;
+
+-- name: DismissPromptSuggestion :exec
+UPDATE prompt_suggestions SET status = 'dismissed', updated_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?;
+
+-- name: ApplyPromptSuggestion :exec
+UPDATE prompt_suggestions SET status = 'applied', updated_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?;
+
+-- name: CountPendingPromptSuggestions :one
+SELECT COUNT(*) FROM prompt_suggestions WHERE status = 'pending';
+
+-- name: UpdatePromptInstructions :exec
+UPDATE prompts SET instructions = ? WHERE id = ?;
+
+-- ============================================================
 -- Schema version
 -- ============================================================
 
