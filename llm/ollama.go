@@ -346,12 +346,16 @@ type ImproveRequest struct {
 
 const improveSystemPrompt = `You are a careful editor of email-classification rules. You are given one existing rule (its name, target Gmail label, and current instructions) and one concrete email that the rule handled incorrectly. Your job is to rewrite the instructions so that the same rule would have handled this email correctly, without damaging its behavior on emails it currently classifies correctly.
 
+CRITICAL OUTPUT REQUIREMENT: Your entire response must be ONLY the rewritten rule instructions — nothing else. No preamble, no explanation, no "Here is the updated rule:", no quoting of the email, no markdown formatting, no commentary. Think as long as you need internally, but the only thing you output is the new instructions text itself.
+
 Rules for rewriting:
 1. Preserve the rule's original intent. Do not widen scope beyond what the name and label imply. Do not turn a narrow rule into a catch-all.
 2. Never use the specific sender address, subject line, or body phrases of the example email as matching criteria. The example is an illustration, not a fingerprint. Match on meaning, purpose, and context.
 3. If trigger_kind is false_negative: explain what category of email was missed and add language that would match it. If trigger_kind is false_positive: add exclusions or clarify the scope so emails like this one are no longer matched.
-4. Keep the output 2-6 sentences. Plain prose. No bullet lists, no code blocks, no markdown headings, no preamble like "Here is the updated rule". Output ONLY the new instructions text.
-5. If the user comments on your suggestion, treat the comment as authoritative feedback and produce another revision that addresses it while still obeying rules 1-4.`
+4. Keep the output 2-6 sentences. Plain prose. No bullet lists, no code blocks, no markdown headings.
+5. If the user comments on your suggestion, treat the comment as authoritative feedback and produce another revision that addresses it while still obeying rules 1-4.
+
+Remember: output ONLY the rewritten instructions text. No other text whatsoever.`
 
 // ImprovePromptInstructions calls the LLM to rewrite a prompt's instructions based on
 // a misclassification example. It returns the revised text, the full conversation (for
@@ -384,7 +388,7 @@ func (c *Client) ImprovePromptInstructions(ctx context.Context, req ImproveReque
 		"stream":   false,
 		"options": map[string]any{
 			"temperature": 0.4,
-			"num_predict": 512,
+			"num_predict": 16384,
 			"num_ctx":     c.numCtx,
 		},
 	}
