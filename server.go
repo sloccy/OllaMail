@@ -1428,7 +1428,7 @@ func (s *server) runImproveSuggestions(
 	correctionID int64,
 	corrErr error,
 ) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 
 	slog.Info("improve suggestions start", "message_id", row.MessageID, "count", len(improveSet))

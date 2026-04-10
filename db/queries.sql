@@ -337,6 +337,7 @@ SELECT id, created_at, updated_at, prompt_id, correction_id, trigger_kind,
        original_instructions, suggested_instructions, conversation_json,
        user_comment, status
 FROM prompt_suggestions
+WHERE status != 'dismissed'
 ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END ASC, id DESC;
 
 -- name: UpdatePromptSuggestion :exec
