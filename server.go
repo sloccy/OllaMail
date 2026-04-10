@@ -1363,41 +1363,26 @@ func (s *server) handleRecategorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Record history entries for audit
-	var histEntries []db.HistoryEntry
+	// Rewrite history so it mirrors the post-correction labeling state
+	var keptIDs []int64
+	for pid := range newCurrentIDs {
+		if !slices.Contains(addedIDs, pid) {
+			keptIDs = append(keptIDs, pid)
+		}
+	}
+	var addedPrompts []db.Prompt
 	for _, pid := range addedIDs {
 		if p, ok := promptByID[pid]; ok {
-			histEntries = append(histEntries, db.HistoryEntry{
-				AccountID:    row.AccountID,
-				AccountEmail: row.AccountEmail,
-				MessageID:    row.MessageID,
-				Subject:      row.Subject,
-				Sender:       row.Sender,
-				PromptID:     sql.NullInt64{Int64: p.ID, Valid: true},
-				PromptName:   sql.NullString{String: p.Name, Valid: true},
-				LabelName:    sql.NullString{String: p.LabelName, Valid: p.LabelName != ""},
-				Actions:      "manual:added",
-			})
+			addedPrompts = append(addedPrompts, p)
 		}
 	}
-	for _, pid := range removedIDs {
-		if p, ok := promptByID[pid]; ok {
-			histEntries = append(histEntries, db.HistoryEntry{
-				AccountID:    row.AccountID,
-				AccountEmail: row.AccountEmail,
-				MessageID:    row.MessageID,
-				Subject:      row.Subject,
-				Sender:       row.Sender,
-				PromptID:     sql.NullInt64{Int64: p.ID, Valid: true},
-				PromptName:   sql.NullString{String: p.Name, Valid: true},
-				LabelName:    sql.NullString{String: p.LabelName, Valid: p.LabelName != ""},
-				Actions:      "manual:removed",
-			})
-		}
-	}
-	for _, h := range histEntries {
-		_ = s.store.AddHistory(ctx, db.AddHistoryParams(h))
-	}
+	_ = s.store.RewriteHistoryForMessage(ctx, row.MessageID, keptIDs, addedPrompts, db.CategorizationHistory{
+		AccountID:    row.AccountID,
+		AccountEmail: row.AccountEmail,
+		MessageID:    row.MessageID,
+		Subject:      row.Subject,
+		Sender:       row.Sender,
+	})
 
 	// Build CSV of new current prompt IDs
 	var newCurrentSlice []string
@@ -1474,7 +1459,7 @@ func (s *server) handleRecategorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("HX-Trigger", `{"showToast":{"message":"Recategorization applied","type":"success"},"closeModal":"recategorize-modal","refreshSuggestionBadge":"1"}`)
+	w.Header().Set("HX-Trigger", `{"showToast":{"message":"Recategorization applied","type":"success"},"closeModal":"recategorize-modal","refreshSuggestionBadge":"1","refreshHistory":"1"}`)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 }
 
