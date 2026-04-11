@@ -1418,44 +1418,71 @@ func (s *server) handleRecategorize(w http.ResponseWriter, r *http.Request) {
 		Note:             note,
 	})
 
-	// Kick off AI improvement in the background so the response returns immediately
+	// Insert placeholder suggestion rows immediately, then kick off the LLM in the background.
 	if len(improveSet) > 0 && svc != nil {
-		go s.runImproveSuggestions(svc, row, promptByID, improveSet, addedIDs, correctionID, corrErr) //nolint:gosec // intentionally detaches from request context
+		msg, fetchErr := gmail.FetchMessage(ctx, svc, row.MessageID, 0)
+		if fetchErr != nil {
+			slog.Error("recategorize: fetch message for suggestions", "err", fetchErr)
+		} else {
+			var corrID sql.NullInt64
+			if corrErr == nil {
+				corrID = sql.NullInt64{Int64: correctionID, Valid: true}
+			}
+			suggestionIDs := make(map[int64]int64, len(improveSet))
+			for pid := range improveSet {
+				p, ok := promptByID[pid]
+				if !ok {
+					continue
+				}
+				triggerKind := "false_positive"
+				if slices.Contains(addedIDs, pid) {
+					triggerKind = "false_negative"
+				}
+				sid, insertErr := s.store.InsertPromptSuggestion(ctx, db.InsertPromptSuggestionParams{
+					PromptID:              p.ID,
+					CorrectionID:          corrID,
+					TriggerKind:           triggerKind,
+					MessageID:             row.MessageID,
+					EmailSubject:          row.Subject,
+					EmailSender:           row.Sender,
+					EmailBodySnapshot:     msg.Body,
+					OriginalInstructions:  p.Instructions,
+					SuggestedInstructions: "",
+					ConversationJson:      "[]",
+					Status:                "generating",
+				})
+				if insertErr != nil {
+					slog.Error("recategorize: insert generating suggestion", "prompt_id", pid, "err", insertErr)
+					continue
+				}
+				suggestionIDs[pid] = sid
+			}
+			if len(suggestionIDs) > 0 {
+				go s.runImproveSuggestions(msg, suggestionIDs, promptByID, addedIDs) //nolint:gosec // intentionally detaches from request context
+			}
+		}
 	}
 
-	w.Header().Set("HX-Trigger", `{"showToast":{"message":"Recategorization applied","type":"success"},"closeModal":"recategorize-modal","refreshSuggestionBadge":"1","refreshHistory":"1"}`)
+	w.Header().Set("HX-Trigger", `{"showToast":{"message":"Recategorization applied","type":"success"},"closeModal":"recategorize-modal","refreshSuggestionBadge":"1","refreshHistory":"1","refreshSuggestions":"1"}`)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 }
 
-// runImproveSuggestions fetches the email body and calls the LLM to generate
-// prompt improvement suggestions for each flagged prompt. Runs in a goroutine
-// so the recategorize handler can return without waiting for Ollama.
+// runImproveSuggestions calls the LLM to generate prompt improvement suggestions
+// for each flagged prompt. The suggestion rows (status='generating') must already
+// exist in the DB before this is called. Runs in a goroutine so the recategorize
+// handler can return without waiting for Ollama.
 func (s *server) runImproveSuggestions(
-	svc *gmail.Client,
-	row db.CategorizationHistory,
+	msg gmail.Message,
+	suggestionIDs map[int64]int64,
 	promptByID map[int64]db.Prompt,
-	improveSet map[int64]bool,
 	addedIDs []int64,
-	correctionID int64,
-	corrErr error,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 
-	slog.Info("improve suggestions start", "message_id", row.MessageID, "count", len(improveSet))
+	slog.Info("improve suggestions start", "count", len(suggestionIDs))
 
-	msg, fetchErr := gmail.FetchMessage(ctx, svc, row.MessageID, 0)
-	if fetchErr != nil {
-		slog.Error("improve suggestions: fetch message", "err", fetchErr)
-		return
-	}
-
-	var corrID sql.NullInt64
-	if corrErr == nil {
-		corrID = sql.NullInt64{Int64: correctionID, Valid: true}
-	}
-
-	for pid := range improveSet {
+	for pid, sid := range suggestionIDs {
 		p, ok := promptByID[pid]
 		if !ok {
 			continue
@@ -1470,33 +1497,35 @@ func (s *server) runImproveSuggestions(
 			LabelName:            p.LabelName,
 			OriginalInstructions: p.Instructions,
 			TriggerKind:          triggerKind,
-			EmailSubject:         row.Subject,
-			EmailSender:          row.Sender,
+			EmailSubject:         msg.Subject,
+			EmailSender:          msg.Sender,
 			EmailBody:            msg.Body,
 		})
 		if llmErr != nil {
 			slog.Error("improve prompt", "prompt_id", pid, "err", llmErr)
+			_ = s.store.FinalizePromptSuggestion(ctx, db.FinalizePromptSuggestionParams{
+				ID:                    sid,
+				SuggestedInstructions: "",
+				ConversationJson:      "[]",
+				Status:                "failed",
+				UserComment:           llmErr.Error(),
+			})
 			continue
 		}
 
 		convJSON, _ := json.Marshal(conv) //nolint:errchkjson // []ChatMessage cannot fail
 
-		_, _ = s.store.InsertPromptSuggestion(ctx, db.InsertPromptSuggestionParams{
-			PromptID:              p.ID,
-			CorrectionID:          corrID,
-			TriggerKind:           triggerKind,
-			MessageID:             row.MessageID,
-			EmailSubject:          row.Subject,
-			EmailSender:           row.Sender,
-			EmailBodySnapshot:     msg.Body,
-			OriginalInstructions:  p.Instructions,
+		_ = s.store.FinalizePromptSuggestion(ctx, db.FinalizePromptSuggestionParams{
+			ID:                    sid,
 			SuggestedInstructions: suggested,
 			ConversationJson:      string(convJSON),
+			Status:                "pending",
+			UserComment:           "",
 		})
-		slog.Info("improve suggestions: suggestion stored", "prompt_id", pid)
+		slog.Info("improve suggestions: suggestion ready", "prompt_id", pid)
 	}
 
-	slog.Info("improve suggestions done", "message_id", row.MessageID)
+	slog.Debug("improve suggestions done", "count", len(suggestionIDs))
 }
 
 // ============================================================
