@@ -40,6 +40,13 @@ func main() {
 		log.Fatalf("migrate db: %v", err) //nolint:gocritic // OS reclaims file handle on Fatalf
 	}
 
+	// Backfill the Troubleshooting debug table from history so it has content
+	// on boot before the first scan runs. No LLM calls; gmail_raw/llm_request
+	// stay empty for backfilled rows.
+	if err := store.BackfillLlmDebugFromHistory(context.Background()); err != nil {
+		slog.Warn("llm debug backfill failed", "err", err)
+	}
+
 	// Seed default poll_interval setting
 	if err := store.SeedSetting("poll_interval", strconv.Itoa(cfg.PollInterval)); err != nil {
 		log.Fatalf("seed settings: %v", err)
