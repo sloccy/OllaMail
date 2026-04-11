@@ -146,6 +146,35 @@ func (q *Queries) ApplyPromptSuggestion(ctx context.Context, id int64) error {
 	return err
 }
 
+const finalizePromptSuggestion = `-- name: FinalizePromptSuggestion :exec
+UPDATE prompt_suggestions SET
+    suggested_instructions = ?,
+    conversation_json      = ?,
+    status                 = ?,
+    user_comment           = ?,
+    updated_at             = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?
+`
+
+type FinalizePromptSuggestionParams struct {
+	SuggestedInstructions string
+	ConversationJson      string
+	Status                string
+	UserComment           string
+	ID                    int64
+}
+
+func (q *Queries) FinalizePromptSuggestion(ctx context.Context, arg FinalizePromptSuggestionParams) error {
+	_, err := q.db.ExecContext(ctx, finalizePromptSuggestion,
+		arg.SuggestedInstructions,
+		arg.ConversationJson,
+		arg.Status,
+		arg.UserComment,
+		arg.ID,
+	)
+	return err
+}
+
 const clearGlobalRetention = `-- name: ClearGlobalRetention :exec
 DELETE FROM account_retention WHERE account_id = ?
 `
@@ -1031,8 +1060,8 @@ func (q *Queries) InsertEmailCorrection(ctx context.Context, arg InsertEmailCorr
 const insertPromptSuggestion = `-- name: InsertPromptSuggestion :one
 
 INSERT INTO prompt_suggestions
-    (prompt_id, correction_id, trigger_kind, message_id, email_subject, email_sender, email_body_snapshot, original_instructions, suggested_instructions, conversation_json)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (prompt_id, correction_id, trigger_kind, message_id, email_subject, email_sender, email_body_snapshot, original_instructions, suggested_instructions, conversation_json, status)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -1047,6 +1076,7 @@ type InsertPromptSuggestionParams struct {
 	OriginalInstructions  string
 	SuggestedInstructions string
 	ConversationJson      string
+	Status                string
 }
 
 // ============================================================
@@ -1064,6 +1094,7 @@ func (q *Queries) InsertPromptSuggestion(ctx context.Context, arg InsertPromptSu
 		arg.OriginalInstructions,
 		arg.SuggestedInstructions,
 		arg.ConversationJson,
+		arg.Status,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -1268,7 +1299,7 @@ SELECT id, created_at, updated_at, prompt_id, correction_id, trigger_kind,
        user_comment, status
 FROM prompt_suggestions
 WHERE status != 'dismissed'
-ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END ASC, id DESC
+ORDER BY CASE status WHEN 'generating' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END ASC, id DESC
 `
 
 func (q *Queries) ListPromptSuggestions(ctx context.Context) ([]PromptSuggestion, error) {

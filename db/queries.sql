@@ -320,8 +320,8 @@ LIMIT 1;
 
 -- name: InsertPromptSuggestion :one
 INSERT INTO prompt_suggestions
-    (prompt_id, correction_id, trigger_kind, message_id, email_subject, email_sender, email_body_snapshot, original_instructions, suggested_instructions, conversation_json)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (prompt_id, correction_id, trigger_kind, message_id, email_subject, email_sender, email_body_snapshot, original_instructions, suggested_instructions, conversation_json, status)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: GetPromptSuggestion :one
@@ -338,7 +338,7 @@ SELECT id, created_at, updated_at, prompt_id, correction_id, trigger_kind,
        user_comment, status
 FROM prompt_suggestions
 WHERE status != 'dismissed'
-ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END ASC, id DESC;
+ORDER BY CASE status WHEN 'generating' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END ASC, id DESC;
 
 -- name: UpdatePromptSuggestion :exec
 UPDATE prompt_suggestions SET
@@ -355,6 +355,15 @@ WHERE id = ?;
 
 -- name: ApplyPromptSuggestion :exec
 UPDATE prompt_suggestions SET status = 'applied', updated_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?;
+
+-- name: FinalizePromptSuggestion :exec
+UPDATE prompt_suggestions SET
+    suggested_instructions = ?,
+    conversation_json      = ?,
+    status                 = ?,
+    user_comment           = ?,
+    updated_at             = strftime('%Y-%m-%d %H:%M:%S', 'now')
 WHERE id = ?;
 
 -- name: CountPendingPromptSuggestions :one
