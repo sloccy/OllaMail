@@ -117,8 +117,8 @@ func (e *Error) Error() string { return e.Msg }
 
 func (c *Client) buildClassifyPayload(email Email, prompts []Prompt) map[string]any {
 	body := buildBody(email, prompts)
-	numPredict := 50
-	if n := len(prompts) * 20; n > numPredict {
+	numPredict := 32
+	if n := len(prompts) * 10; n > numPredict {
 		numPredict = n
 	}
 	return map[string]any{
@@ -232,21 +232,21 @@ func buildBody(email Email, prompts []Prompt) string {
 		body = email.Snippet
 	}
 
-	return fmt.Sprintf(`You are an email classification assistant. You will be given an email and a list of labeling rules. For each rule, decide if the label should be applied to this email.
+	return fmt.Sprintf(`You are an email classification assistant. For each rule below, decide if the label should be applied to the email that follows.
 
 Rules:
 %s
+Respond with ONLY a JSON object where each key is the rule's number (1, 2, 3...) and the value is true or false.
+Example: {%s}
+No explanation, no markdown, just the JSON object.
+
 Email:
 From: %s
 Subject: %s
 Body:
-%s
-
-Respond with ONLY a JSON object where each key is the rule's number (1, 2, 3...) and the value is true or false.
-Example: {%s}
-No explanation, no markdown, just the JSON object.`,
-		rulesText, email.Sender, email.Subject, body,
-		strings.Join(exampleParts, ", "))
+%s`,
+		rulesText, strings.Join(exampleParts, ", "),
+		email.Sender, email.Subject, body)
 }
 
 // ============================================================
