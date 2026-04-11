@@ -20,14 +20,13 @@ type EmailModify struct {
 	RemoveLabels []string
 }
 
-// ProcessAccount processes all new emails for one account.
-// Returns the Gmail service so it can be reused by retention.
-func ProcessAccount(ctx context.Context, store *db.Store, ollamaClient *llm.Client, gmailAuth *gmailpkg.Auth, account db.Account, allPrompts []db.Prompt, cfg ProcessConfig) (*gmailpkg.ServiceWrapper, error) {
+// setupAccountContext loads OAuth config, creates a Gmail client, and filters
+// prompts for the given account. Shared by ProcessAccount and BackfillLlmDebug.
+func setupAccountContext(ctx context.Context, store *db.Store, gmailAuth *gmailpkg.Auth, account db.Account, allPrompts []db.Prompt) (*gmailpkg.Client, []db.Prompt, error) {
 	oauthCfg, err := gmailAuth.ConfigFromFile()
 	if err != nil {
-		return nil, fmt.Errorf("load oauth config: %w", err)
+		return nil, nil, fmt.Errorf("load oauth config: %w", err)
 	}
-
 	svc, err := gmailpkg.NewService(ctx, account.CredentialsJson, oauthCfg, func(newCreds string) {
 		_ = store.UpdateAccountCredentials(ctx, db.UpdateAccountCredentialsParams{
 			CredentialsJson: newCreds,
@@ -35,12 +34,29 @@ func ProcessAccount(ctx context.Context, store *db.Store, ollamaClient *llm.Clie
 		})
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create gmail service: %w", err)
+		return nil, nil, fmt.Errorf("create gmail service: %w", err)
+	}
+	return svc, filterPrompts(allPrompts, account.ID), nil
+}
+
+// marshalGmailDebug serialises a Gmail message to compact JSON for the debug table.
+func marshalGmailDebug(msg gmailpkg.Message) string {
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+// ProcessAccount processes all new emails for one account.
+// Returns the Gmail service so it can be reused by retention.
+func ProcessAccount(ctx context.Context, store *db.Store, ollamaClient *llm.Client, gmailAuth *gmailpkg.Auth, account db.Account, allPrompts []db.Prompt, cfg ProcessConfig) (*gmailpkg.ServiceWrapper, error) {
+	svc, prompts, err := setupAccountContext(ctx, store, gmailAuth, account, allPrompts)
+	if err != nil {
+		return nil, err
 	}
 	wrapper := &gmailpkg.ServiceWrapper{Svc: svc}
 
-	// Filter prompts for this account
-	prompts := filterPrompts(allPrompts, account.ID)
 	if len(prompts) == 0 {
 		return wrapper, nil
 	}
@@ -139,13 +155,9 @@ func processEmail(
 	store.Log("INFO", fmt.Sprintf("[%s] Classifying: '%s' from %s",
 		account.Email, gmailpkg.Truncate(msg.Subject, 60), gmailpkg.Truncate(msg.Sender, 60)))
 
-	gmailRawBytes, err := json.MarshalIndent(msg, "", "  ")
-	if err != nil {
-		gmailRawBytes = []byte("{}")
-	}
-	gmailRaw := string(gmailRawBytes)
+	gmailRaw := marshalGmailDebug(msg)
 
-	results, requestJSON, rawResponse, llmErr := ollamaClient.ClassifyEmailBatch(ctx, store, email, llmPrompts)
+	classified, llmErr := ollamaClient.ClassifyEmailBatch(ctx, store, email, llmPrompts)
 
 	var logs []db.LogEntry
 	var history []db.HistoryEntry
@@ -160,7 +172,7 @@ func processEmail(
 
 	var matched []string
 	for _, p := range prompts {
-		if results[p.ID] {
+		if classified.Results[p.ID] {
 			matched = append(matched, p.Name)
 		}
 	}
@@ -175,7 +187,7 @@ func processEmail(
 		if stop {
 			break
 		}
-		matched := results[p.ID]
+		matched := classified.Results[p.ID]
 		if !matched {
 			continue
 		}
@@ -236,7 +248,7 @@ func processEmail(
 			PromptName:   sql.NullString{String: p.Name, Valid: true},
 			LabelName:    sql.NullString{String: p.LabelName, Valid: p.LabelName != ""},
 			Actions:      strings.Join(actions, ", "),
-			LlmResponse:  rawResponse,
+			LlmResponse:  classified.RawResponse,
 		})
 	}
 
@@ -249,13 +261,13 @@ func processEmail(
 			Subject:      msg.Subject,
 			Sender:       msg.Sender,
 			Actions:      "no match",
-			LlmResponse:  rawResponse,
+			LlmResponse:  classified.RawResponse,
 		})
 	}
 
 	logs = append(logs, db.LogEntry{Level: "INFO", Message: fmt.Sprintf("Processed %q", msg.Subject)})
 	if debugLogging {
-		logs = append(logs, db.LogEntry{Level: "DEBUG", Message: "LLM response: " + rawResponse})
+		logs = append(logs, db.LogEntry{Level: "DEBUG", Message: "LLM response: " + classified.RawResponse})
 	}
 
 	if err := store.BatchInsertProcessingResults(ctx, logs, history, account.ID, msg.ID); err != nil {
@@ -263,15 +275,15 @@ func processEmail(
 		// Don't return error — email is processed, don't retry
 	}
 
-	if err := store.RecordLlmDebug(ctx, db.LlmDebugEntry{
+	if err := store.RecordLlmDebug(ctx, db.AddLlmDebugParams{
 		AccountID:    account.ID,
 		AccountEmail: account.Email,
 		MessageID:    msg.ID,
 		Subject:      msg.Subject,
 		Sender:       msg.Sender,
 		GmailRaw:     gmailRaw,
-		LlmRequest:   requestJSON,
-		LlmResponse:  rawResponse,
+		LlmRequest:   classified.RequestJSON,
+		LlmResponse:  classified.RawResponse,
 	}); err != nil {
 		slog.Error("llm debug write failed", "err", err)
 	}

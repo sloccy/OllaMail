@@ -65,12 +65,20 @@ func main() {
 	// Gmail auth
 	gmailAuth := gmail.NewAuth(cfg.CredentialsFile)
 
+	// Graceful shutdown context — created early so goroutines can observe it.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// Seed the Troubleshooting debug table with the 3 most recent processed
 	// emails when the table is empty. Delayed 10s to allow Gmail auth to be
 	// ready before fetching.
 	go func() {
-		time.Sleep(10 * time.Second)
-		if err := processor.BackfillLlmDebug(context.Background(), store, ollamaClient, gmailAuth,
+		select {
+		case <-time.After(10 * time.Second):
+		case <-ctx.Done():
+			return
+		}
+		if err := processor.BackfillLlmDebug(ctx, store, ollamaClient, gmailAuth,
 			processor.ProcessConfig{BodyTruncation: cfg.EmailBodyTrunc}); err != nil {
 			slog.Warn("llm debug backfill failed", "err", err)
 		}
@@ -87,16 +95,12 @@ func main() {
 	p.Start()
 
 	// HTTP server
-	srv := newServer(store, ollamaClient, p, gmailAuth, &cfg, secretKey)
+	srv := newServer(ctx, store, ollamaClient, p, gmailAuth, &cfg, secretKey)
 	httpSrv := &http.Server{
 		Addr:              ":5000",
 		Handler:           srv,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
-	// Graceful shutdown
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	go func() {
 		slog.Info("listening", "addr", httpSrv.Addr)

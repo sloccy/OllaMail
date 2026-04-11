@@ -289,7 +289,7 @@ document.body.addEventListener('htmx:afterSwap', function(e) {
   document.getElementById('pollerLabel').textContent = running ? 'running' : 'stopped';
 });
 
-// ---- HX-Trigger event handlers ----
+// ---- Hx-Trigger event handlers ----
 document.body.addEventListener('showToast', function(e) {
   const { message, type } = e.detail || {};
   if (message) toast(message, type || 'success');

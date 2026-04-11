@@ -1,7 +1,7 @@
 {{if .}}
 <div class="d-flex flex-column gap-3" id="suggestions-list">
   {{range .}}
-  <div class="card p-3 suggestion-card">
+  <div class="card p-3 suggestion-card" id="suggestion-row-{{.ID}}">
     <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
       <div class="flex-grow-1" style="min-width:0">
         <div class="d-flex align-items-center gap-2 flex-wrap mb-1">

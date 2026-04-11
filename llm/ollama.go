@@ -115,7 +115,6 @@ type Error struct{ Msg string }
 
 func (e *Error) Error() string { return e.Msg }
 
-// buildClassifyPayload constructs the Ollama request payload for email classification.
 func (c *Client) buildClassifyPayload(email Email, prompts []Prompt) map[string]any {
 	body := buildBody(email, prompts)
 	numPredict := 50
@@ -142,9 +141,8 @@ func (c *Client) buildClassifyPayload(email Email, prompts []Prompt) map[string]
 	}
 }
 
-// BuildClassifyRequestJSON returns the JSON payload that would be sent to Ollama
-// for the given email and prompts. No network call is made. Returns an empty
-// string if prompts is empty.
+// BuildClassifyRequestJSON returns the serialised Ollama payload for the given
+// email and prompts without making a network call. Returns "" when prompts is empty.
 func (c *Client) BuildClassifyRequestJSON(email Email, prompts []Prompt) string {
 	if len(prompts) == 0 {
 		return ""
@@ -156,9 +154,16 @@ func (c *Client) BuildClassifyRequestJSON(email Email, prompts []Prompt) string 
 	return string(b)
 }
 
-func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email Email, prompts []Prompt) (map[int64]bool, string, string, error) {
+// ClassifyResult holds the output of ClassifyEmailBatch.
+type ClassifyResult struct {
+	Results     map[int64]bool
+	RequestJSON string
+	RawResponse string
+}
+
+func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email Email, prompts []Prompt) (ClassifyResult, error) {
 	if len(prompts) == 0 {
-		return nil, "", "", nil
+		return ClassifyResult{}, nil
 	}
 
 	payload := c.buildClassifyPayload(email, prompts)
@@ -167,7 +172,7 @@ func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email 
 	if err != nil {
 		requestBytes = []byte("{}")
 	}
-	requestJSON := string(requestBytes)
+	res := ClassifyResult{RequestJSON: string(requestBytes)}
 
 	subject := email.Subject
 	if len(subject) > 60 {
@@ -178,7 +183,7 @@ func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email 
 	raw, err := c.doChat(ctx, payload)
 	if err != nil {
 		store.Log("ERROR", fmt.Sprintf("LLM request failed: %v", err))
-		return nil, requestJSON, "", &Error{Msg: fmt.Sprintf("LLM request failed: %v", err)}
+		return res, &Error{Msg: fmt.Sprintf("LLM request failed: %v", err)}
 	}
 
 	store.Log("INFO", fmt.Sprintf("LLM classify response: content=%d chars", len(raw)))
@@ -190,17 +195,17 @@ func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email 
 		store.Log("INFO", "LLM raw content: "+preview)
 	}
 
-	rawResponse := raw
+	res.RawResponse = raw
 	raw = strings.TrimSpace(fenceRe.ReplaceAllString(raw, ""))
 
-	var result map[string]any
-	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 		store.Log("ERROR", fmt.Sprintf("LLM parse error: %v | raw: %s", err, raw))
-		return nil, requestJSON, rawResponse, &Error{Msg: fmt.Sprintf("LLM parse error: %v", err)}
+		return res, &Error{Msg: fmt.Sprintf("LLM parse error: %v", err)}
 	}
 
-	parsed := make(map[int64]bool, len(prompts))
-	for k, v := range result {
+	res.Results = make(map[int64]bool, len(prompts))
+	for k, v := range parsed {
 		var idx int
 		if _, err := fmt.Sscanf(k, "%d", &idx); err != nil {
 			continue
@@ -208,10 +213,10 @@ func (c *Client) ClassifyEmailBatch(ctx context.Context, store *db.Store, email 
 		idx-- // 1-based to 0-based
 		if idx >= 0 && idx < len(prompts) {
 			b, _ := v.(bool)
-			parsed[prompts[idx].ID] = b
+			res.Results[prompts[idx].ID] = b
 		}
 	}
-	return parsed, requestJSON, rawResponse, nil
+	return res, nil
 }
 
 func buildBody(email Email, prompts []Prompt) string {
