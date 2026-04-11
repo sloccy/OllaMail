@@ -35,6 +35,7 @@ const retentionUnitYears = "years"
 
 // server holds all dependencies and the route mux.
 type server struct {
+	ctx       context.Context
 	store     *db.Store
 	ollama    *llm.Client
 	poller    *poller.Poller
@@ -49,8 +50,9 @@ type server struct {
 	oauthState map[string]time.Time
 }
 
-func newServer(store *db.Store, ollamaClient *llm.Client, p *poller.Poller, auth *gmail.Auth, cfg *Config, secretKey []byte) http.Handler {
+func newServer(ctx context.Context, store *db.Store, ollamaClient *llm.Client, p *poller.Poller, auth *gmail.Auth, cfg *Config, secretKey []byte) http.Handler {
 	s := &server{
+		ctx:        ctx,
 		store:      store,
 		ollama:     ollamaClient,
 		poller:     p,
@@ -211,6 +213,12 @@ func (s *server) fragmentResponse(w http.ResponseWriter, path string, data any, 
 
 func (s *server) fragmentResponseNamed(w http.ResponseWriter, name string, data any) {
 	s.render(w, name, data)
+}
+
+func setHxTrigger(w http.ResponseWriter, triggers map[string]any) {
+	if b, err := json.Marshal(triggers); err == nil {
+		w.Header().Set("Hx-Trigger", string(b))
+	}
 }
 
 // ============================================================
@@ -925,7 +933,10 @@ func (s *server) handleOAuthExchange(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleScan(w http.ResponseWriter, _ *http.Request) {
 	s.store.Log("INFO", "Manual scan triggered")
 	s.poller.RunNow()
-	w.Header().Set("Hx-Trigger", `{"showToast":{"message":"Scan complete","type":"success"},"refreshDashboard":""}`)
+	setHxTrigger(w, map[string]any{
+		"showToast":        map[string]any{"message": "Scan complete", "type": "success"},
+		"refreshDashboard": "",
+	})
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -1428,20 +1439,26 @@ func (s *server) handleRecategorize(w http.ResponseWriter, r *http.Request) {
 			if corrErr == nil {
 				corrID = sql.NullInt64{Int64: correctionID, Valid: true}
 			}
+
+			triggerKinds := make(map[int64]string, len(improveSet))
+			for pid := range improveSet {
+				if slices.Contains(addedIDs, pid) {
+					triggerKinds[pid] = db.TriggerKindFalseNegative
+				} else {
+					triggerKinds[pid] = db.TriggerKindFalsePositive
+				}
+			}
+
 			suggestionIDs := make(map[int64]int64, len(improveSet))
 			for pid := range improveSet {
 				p, ok := promptByID[pid]
 				if !ok {
 					continue
 				}
-				triggerKind := "false_positive"
-				if slices.Contains(addedIDs, pid) {
-					triggerKind = "false_negative"
-				}
 				sid, insertErr := s.store.InsertPromptSuggestion(ctx, db.InsertPromptSuggestionParams{
 					PromptID:              p.ID,
 					CorrectionID:          corrID,
-					TriggerKind:           triggerKind,
+					TriggerKind:           triggerKinds[pid],
 					MessageID:             row.MessageID,
 					EmailSubject:          row.Subject,
 					EmailSender:           row.Sender,
@@ -1449,7 +1466,7 @@ func (s *server) handleRecategorize(w http.ResponseWriter, r *http.Request) {
 					OriginalInstructions:  p.Instructions,
 					SuggestedInstructions: "",
 					ConversationJson:      "[]",
-					Status:                "generating",
+					Status:                db.SuggestionStatusGenerating,
 				})
 				if insertErr != nil {
 					slog.Error("recategorize: insert generating suggestion", "prompt_id", pid, "err", insertErr)
@@ -1458,12 +1475,18 @@ func (s *server) handleRecategorize(w http.ResponseWriter, r *http.Request) {
 				suggestionIDs[pid] = sid
 			}
 			if len(suggestionIDs) > 0 {
-				go s.runImproveSuggestions(msg, suggestionIDs, promptByID, addedIDs) //nolint:gosec // intentionally detaches from request context
+				go s.runImproveSuggestions(s.ctx, msg, suggestionIDs, promptByID, triggerKinds)
 			}
 		}
 	}
 
-	w.Header().Set("Hx-Trigger", `{"showToast":{"message":"Recategorization applied","type":"success"},"closeModal":"recategorize-modal","refreshSuggestionBadge":"1","refreshHistory":"1","refreshSuggestions":"1"}`)
+	setHxTrigger(w, map[string]any{
+		"showToast":              map[string]any{"message": "Recategorization applied", "type": "success"},
+		"closeModal":             "recategorize-modal",
+		"refreshSuggestionBadge": "1",
+		"refreshHistory":         "1",
+		"refreshSuggestions":     "1",
+	})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 }
 
@@ -1472,12 +1495,13 @@ func (s *server) handleRecategorize(w http.ResponseWriter, r *http.Request) {
 // exist in the DB before this is called. Runs in a goroutine so the recategorize
 // handler can return without waiting for Ollama.
 func (s *server) runImproveSuggestions(
+	baseCtx context.Context,
 	msg gmail.Message,
 	suggestionIDs map[int64]int64,
 	promptByID map[int64]db.Prompt,
-	addedIDs []int64,
+	triggerKinds map[int64]string,
 ) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(baseCtx, 20*time.Minute)
 	defer cancel()
 
 	slog.Info("improve suggestions start", "count", len(suggestionIDs))
@@ -1487,41 +1511,41 @@ func (s *server) runImproveSuggestions(
 		if !ok {
 			continue
 		}
-		triggerKind := "false_positive"
-		if slices.Contains(addedIDs, pid) {
-			triggerKind = "false_negative"
-		}
 
 		suggested, conv, llmErr := s.ollama.ImprovePromptInstructions(ctx, llm.ImproveRequest{
 			PromptName:           p.Name,
 			LabelName:            p.LabelName,
 			OriginalInstructions: p.Instructions,
-			TriggerKind:          triggerKind,
+			TriggerKind:          triggerKinds[pid],
 			EmailSubject:         msg.Subject,
 			EmailSender:          msg.Sender,
 			EmailBody:            msg.Body,
 		})
 		if llmErr != nil {
 			slog.Error("improve prompt", "prompt_id", pid, "err", llmErr)
-			_ = s.store.FinalizePromptSuggestion(ctx, db.FinalizePromptSuggestionParams{
+			if err := s.store.FinalizePromptSuggestion(ctx, db.FinalizePromptSuggestionParams{
 				ID:                    sid,
 				SuggestedInstructions: "",
 				ConversationJson:      "[]",
-				Status:                "failed",
+				Status:                db.SuggestionStatusFailed,
 				UserComment:           llmErr.Error(),
-			})
+			}); err != nil {
+				slog.Error("finalize suggestion failed", "prompt_id", pid, "err", err)
+			}
 			continue
 		}
 
 		convJSON, _ := json.Marshal(conv) //nolint:errchkjson // []ChatMessage cannot fail
 
-		_ = s.store.FinalizePromptSuggestion(ctx, db.FinalizePromptSuggestionParams{
+		if err := s.store.FinalizePromptSuggestion(ctx, db.FinalizePromptSuggestionParams{
 			ID:                    sid,
 			SuggestedInstructions: suggested,
 			ConversationJson:      string(convJSON),
-			Status:                "pending",
+			Status:                db.SuggestionStatusPending,
 			UserComment:           "",
-		})
+		}); err != nil {
+			slog.Error("finalize suggestion failed", "prompt_id", pid, "err", err)
+		}
 		slog.Info("improve suggestions: suggestion ready", "prompt_id", pid)
 	}
 
@@ -1677,7 +1701,7 @@ func (s *server) handlePromptSuggestionRegenerate(w http.ResponseWriter, r *http
 		OriginalInstructions:  sg.OriginalInstructions,
 		SuggestedInstructions: suggested,
 		UserComment:           userComment,
-		Status:                "pending",
+		Status:                db.SuggestionStatusPending,
 	}
 	s.fragmentResponse(w, "templates/fragments/prompt_suggestion_detail.html", view, "")
 }
@@ -1698,8 +1722,8 @@ func (s *server) handlePromptSuggestionApply(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "apply failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// Re-render the suggestions list
-	s.handlePromptSuggestionsList(w, r)
+	setHxTrigger(w, map[string]any{"refreshSuggestionBadge": "1"})
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) handlePromptSuggestionDismiss(w http.ResponseWriter, r *http.Request) {
@@ -1710,7 +1734,8 @@ func (s *server) handlePromptSuggestionDismiss(w http.ResponseWriter, r *http.Re
 	}
 	ctx := r.Context()
 	_ = s.store.DismissPromptSuggestion(ctx, id)
-	s.handlePromptSuggestionsList(w, r)
+	setHxTrigger(w, map[string]any{"refreshSuggestionBadge": "1"})
+	w.WriteHeader(http.StatusOK)
 }
 
 // ============================================================

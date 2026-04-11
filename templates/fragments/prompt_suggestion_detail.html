@@ -58,54 +58,36 @@
   <div class="d-flex gap-2 flex-wrap">
     <button type="button" class="btn btn-outline-secondary btn-sm"
       hx-post="/fragments/prompt-suggestions/{{.ID}}/dismiss"
-      hx-target="#suggestions-list-container"
-      hx-swap="innerHTML"
+      hx-target="#suggestion-row-{{.ID}}"
+      hx-swap="delete"
       hx-on::after-request="document.getElementById('suggestion-detail-container').innerHTML = ''">
       Dismiss
     </button>
   </div>
-  {{else if eq .Status "pending"}}
+  {{else if or (eq .Status "pending") (eq .Status "failed")}}
   <form hx-post="/fragments/prompt-suggestions/{{.ID}}/regenerate"
     hx-target="#suggestion-detail-{{.ID}}"
     hx-swap="outerHTML">
     <div class="mb-3">
       <label class="form-label small">Comment for AI (optional)</label>
       <textarea name="user_comment" class="form-control form-control-sm" rows="2"
-        placeholder="e.g. The suggestion is too broad — narrow it to only X">{{.UserComment}}</textarea>
+        placeholder="{{if eq .Status "pending"}}e.g. The suggestion is too broad — narrow it to only X{{else}}e.g. Add context about what went wrong or what to try differently{{end}}">{{if eq .Status "pending"}}{{.UserComment}}{{end}}</textarea>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-      <button type="submit" class="btn btn-outline-primary btn-sm" hx-disabled-elt="this">Regenerate with AI</button>
+      <button type="submit" class="btn btn-outline-primary btn-sm" hx-disabled-elt="this">{{if eq .Status "pending"}}Regenerate with AI{{else}}Retry with AI{{end}}</button>
+      {{if eq .Status "pending"}}
       <button type="button" class="btn btn-success btn-sm"
         hx-post="/fragments/prompt-suggestions/{{.ID}}/apply"
-        hx-target="#suggestions-list-container"
-        hx-swap="innerHTML"
+        hx-target="#suggestion-row-{{.ID}}"
+        hx-swap="delete"
         hx-on::after-request="document.getElementById('suggestion-detail-container').innerHTML = ''">
         Apply to Prompt
       </button>
+      {{end}}
       <button type="button" class="btn btn-outline-secondary btn-sm"
         hx-post="/fragments/prompt-suggestions/{{.ID}}/dismiss"
-        hx-target="#suggestions-list-container"
-        hx-swap="innerHTML"
-        hx-on::after-request="document.getElementById('suggestion-detail-container').innerHTML = ''">
-        Dismiss
-      </button>
-    </div>
-  </form>
-  {{else if eq .Status "failed"}}
-  <form hx-post="/fragments/prompt-suggestions/{{.ID}}/regenerate"
-    hx-target="#suggestion-detail-{{.ID}}"
-    hx-swap="outerHTML">
-    <div class="mb-3">
-      <label class="form-label small">Comment for AI (optional)</label>
-      <textarea name="user_comment" class="form-control form-control-sm" rows="2"
-        placeholder="e.g. Add context about what went wrong or what to try differently"></textarea>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <button type="submit" class="btn btn-outline-primary btn-sm" hx-disabled-elt="this">Retry with AI</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm"
-        hx-post="/fragments/prompt-suggestions/{{.ID}}/dismiss"
-        hx-target="#suggestions-list-container"
-        hx-swap="innerHTML"
+        hx-target="#suggestion-row-{{.ID}}"
+        hx-swap="delete"
         hx-on::after-request="document.getElementById('suggestion-detail-container').innerHTML = ''">
         Dismiss
       </button>
