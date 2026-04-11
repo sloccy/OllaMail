@@ -82,7 +82,6 @@ func (q *Queries) AddLabelRetention(ctx context.Context, arg AddLabelRetentionPa
 
 const addLlmDebug = `-- name: AddLlmDebug :exec
 
-
 INSERT INTO llm_debug (account_id, account_email, message_id, subject, sender, gmail_raw, llm_request, llm_response)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
@@ -98,9 +97,6 @@ type AddLlmDebugParams struct {
 	LlmResponse  string
 }
 
-// ============================================================
-// Schema version
-// ============================================================
 // ============================================================
 // LLM Debug
 // ============================================================
@@ -143,35 +139,6 @@ WHERE id = ?
 
 func (q *Queries) ApplyPromptSuggestion(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, applyPromptSuggestion, id)
-	return err
-}
-
-const finalizePromptSuggestion = `-- name: FinalizePromptSuggestion :exec
-UPDATE prompt_suggestions SET
-    suggested_instructions = ?,
-    conversation_json      = ?,
-    status                 = ?,
-    user_comment           = ?,
-    updated_at             = strftime('%Y-%m-%d %H:%M:%S', 'now')
-WHERE id = ?
-`
-
-type FinalizePromptSuggestionParams struct {
-	SuggestedInstructions string
-	ConversationJson      string
-	Status                string
-	UserComment           string
-	ID                    int64
-}
-
-func (q *Queries) FinalizePromptSuggestion(ctx context.Context, arg FinalizePromptSuggestionParams) error {
-	_, err := q.db.ExecContext(ctx, finalizePromptSuggestion,
-		arg.SuggestedInstructions,
-		arg.ConversationJson,
-		arg.Status,
-		arg.UserComment,
-		arg.ID,
-	)
 	return err
 }
 
@@ -282,6 +249,15 @@ func (q *Queries) DeleteHistoryByAccount(ctx context.Context, accountID int64) e
 	return err
 }
 
+const deleteIncompleteLlmDebug = `-- name: DeleteIncompleteLlmDebug :exec
+DELETE FROM llm_debug WHERE gmail_raw = '' OR llm_request = ''
+`
+
+func (q *Queries) DeleteIncompleteLlmDebug(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteIncompleteLlmDebug)
+	return err
+}
+
 const deleteLabelExemption = `-- name: DeleteLabelExemption :exec
 DELETE FROM label_exemptions WHERE id = ? AND account_id = ?
 `
@@ -366,6 +342,35 @@ WHERE id = ?
 
 func (q *Queries) DismissPromptSuggestion(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, dismissPromptSuggestion, id)
+	return err
+}
+
+const finalizePromptSuggestion = `-- name: FinalizePromptSuggestion :exec
+UPDATE prompt_suggestions SET
+    suggested_instructions = ?,
+    conversation_json      = ?,
+    status                 = ?,
+    user_comment           = ?,
+    updated_at             = strftime('%Y-%m-%d %H:%M:%S', 'now')
+WHERE id = ?
+`
+
+type FinalizePromptSuggestionParams struct {
+	SuggestedInstructions string
+	ConversationJson      string
+	Status                string
+	UserComment           string
+	ID                    int64
+}
+
+func (q *Queries) FinalizePromptSuggestion(ctx context.Context, arg FinalizePromptSuggestionParams) error {
+	_, err := q.db.ExecContext(ctx, finalizePromptSuggestion,
+		arg.SuggestedInstructions,
+		arg.ConversationJson,
+		arg.Status,
+		arg.UserComment,
+		arg.ID,
+	)
 	return err
 }
 
@@ -1582,15 +1587,6 @@ DELETE FROM llm_debug WHERE id NOT IN (SELECT id FROM llm_debug ORDER BY id DESC
 
 func (q *Queries) TrimLlmDebug(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, trimLlmDebug)
-	return err
-}
-
-const deleteIncompleteLlmDebug = `-- name: DeleteIncompleteLlmDebug :exec
-DELETE FROM llm_debug WHERE gmail_raw = '' OR llm_request = ''
-`
-
-func (q *Queries) DeleteIncompleteLlmDebug(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteIncompleteLlmDebug)
 	return err
 }
 

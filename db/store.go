@@ -546,19 +546,8 @@ func (s *Store) RewriteHistoryForMessage(ctx context.Context, messageID string, 
 // LLM Debug helpers
 // ============================================================
 
-type LlmDebugEntry struct {
-	AccountID    int64
-	AccountEmail string
-	MessageID    string
-	Subject      string
-	Sender       string
-	GmailRaw     string
-	LlmRequest   string
-	LlmResponse  string
-}
-
-func (s *Store) RecordLlmDebug(ctx context.Context, e LlmDebugEntry) error {
-	if err := s.AddLlmDebug(ctx, AddLlmDebugParams(e)); err != nil {
+func (s *Store) RecordLlmDebug(ctx context.Context, e AddLlmDebugParams) error {
+	if err := s.AddLlmDebug(ctx, e); err != nil {
 		return err
 	}
 	return s.TrimLlmDebug(ctx)
