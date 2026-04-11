@@ -8,10 +8,16 @@
         {{else}}
           <span class="badge text-bg-danger">wrong match (false positive)</span>
         {{end}}
-        {{if eq .Status "pending"}}
+        {{if eq .Status "generating"}}
+          <span class="badge text-bg-warning">
+            <span class="spinner-border spinner-border-sm me-1" style="width:.65em;height:.65em" role="status" aria-hidden="true"></span>Generating&hellip;
+          </span>
+        {{else if eq .Status "pending"}}
           <span class="badge text-bg-primary">pending</span>
         {{else if eq .Status "applied"}}
           <span class="badge text-bg-success">applied</span>
+        {{else if eq .Status "failed"}}
+          <span class="badge text-bg-danger">failed</span>
         {{else}}
           <span class="badge text-bg-secondary">dismissed</span>
         {{end}}
@@ -35,11 +41,30 @@
     </div>
     <div class="col-md-6">
       <div class="form-label small fw-semibold text-success text-uppercase">Suggested Instructions</div>
+      {{if eq .Status "generating"}}
+      <div class="p-2 border rounded bg-body-secondary d-flex align-items-center gap-2 text-muted small" style="min-height:5rem">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        Waiting for AI&hellip;
+      </div>
+      {{else if eq .Status "failed"}}
+      <div class="p-2 border border-danger rounded bg-body-secondary font-monospace small text-danger" style="white-space:pre-wrap;word-break:break-word;min-height:5rem">{{.UserComment}}</div>
+      {{else}}
       <pre class="p-2 border border-success rounded bg-body-secondary font-monospace small" style="white-space:pre-wrap;word-break:break-word;min-height:5rem">{{.SuggestedInstructions}}</pre>
+      {{end}}
     </div>
   </div>
 
-  {{if eq .Status "pending"}}
+  {{if eq .Status "generating"}}
+  <div class="d-flex gap-2 flex-wrap">
+    <button type="button" class="btn btn-outline-secondary btn-sm"
+      hx-post="/fragments/prompt-suggestions/{{.ID}}/dismiss"
+      hx-target="#suggestions-list-container"
+      hx-swap="innerHTML"
+      hx-on::after-request="document.getElementById('suggestion-detail-container').innerHTML = ''">
+      Dismiss
+    </button>
+  </div>
+  {{else if eq .Status "pending"}}
   <form hx-post="/fragments/prompt-suggestions/{{.ID}}/regenerate"
     hx-target="#suggestion-detail-{{.ID}}"
     hx-swap="outerHTML">
@@ -57,6 +82,26 @@
         hx-on::after-request="document.getElementById('suggestion-detail-container').innerHTML = ''">
         Apply to Prompt
       </button>
+      <button type="button" class="btn btn-outline-secondary btn-sm"
+        hx-post="/fragments/prompt-suggestions/{{.ID}}/dismiss"
+        hx-target="#suggestions-list-container"
+        hx-swap="innerHTML"
+        hx-on::after-request="document.getElementById('suggestion-detail-container').innerHTML = ''">
+        Dismiss
+      </button>
+    </div>
+  </form>
+  {{else if eq .Status "failed"}}
+  <form hx-post="/fragments/prompt-suggestions/{{.ID}}/regenerate"
+    hx-target="#suggestion-detail-{{.ID}}"
+    hx-swap="outerHTML">
+    <div class="mb-3">
+      <label class="form-label small">Comment for AI (optional)</label>
+      <textarea name="user_comment" class="form-control form-control-sm" rows="2"
+        placeholder="e.g. Add context about what went wrong or what to try differently"></textarea>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="submit" class="btn btn-outline-primary btn-sm" hx-disabled-elt="this">Retry with AI</button>
       <button type="button" class="btn btn-outline-secondary btn-sm"
         hx-post="/fragments/prompt-suggestions/{{.ID}}/dismiss"
         hx-target="#suggestions-list-container"

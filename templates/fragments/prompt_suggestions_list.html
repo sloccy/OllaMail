@@ -11,16 +11,22 @@
           {{else}}
             <span class="badge text-bg-danger">wrong match</span>
           {{end}}
-          {{if eq .Status "pending"}}
+          {{if eq .Status "generating"}}
+            <span class="badge text-bg-warning">
+              <span class="spinner-border spinner-border-sm me-1" style="width:.65em;height:.65em" role="status" aria-hidden="true"></span>Generating&hellip;
+            </span>
+          {{else if eq .Status "pending"}}
             <span class="badge text-bg-primary">pending</span>
           {{else if eq .Status "applied"}}
             <span class="badge text-bg-success">applied</span>
+          {{else if eq .Status "failed"}}
+            <span class="badge text-bg-danger">failed</span>
           {{else}}
             <span class="badge text-bg-secondary">dismissed</span>
           {{end}}
         </div>
         <div class="small text-muted text-truncate mb-2">{{if .EmailSubject}}{{.EmailSubject}}{{else}}(no subject){{end}} &mdash; {{.EmailSender}}</div>
-        {{if eq .Status "pending"}}
+        {{if or (eq .Status "pending") (eq .Status "failed")}}
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-outline-secondary btn-sm"
             hx-get="/fragments/prompt-suggestions/{{.ID}}"
