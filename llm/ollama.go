@@ -17,6 +17,7 @@ import (
 )
 
 var fenceRe = regexp.MustCompile(`(?s)^` + "```" + `(?:json)?\s*|\s*` + "```" + `$`)
+var blankRunRe = regexp.MustCompile(`\n{3,}`)
 
 type Client struct {
 	host       string
@@ -231,6 +232,8 @@ func buildBody(email Email, prompts []Prompt) string {
 	if body == "" {
 		body = email.Snippet
 	}
+	body = strings.ReplaceAll(body, "\r", "")
+	body = blankRunRe.ReplaceAllString(body, "\n\n")
 
 	return fmt.Sprintf(`You are an email classification assistant. For each rule below, decide if the label should be applied to the email that follows.
 
