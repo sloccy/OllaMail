@@ -22,6 +22,7 @@ var blankRunRe = regexp.MustCompile(`\n{3,}`)
 const (
 	jsonKeyModel       = "model"
 	jsonKeyRole        = "role"
+	roleUser           = "user"
 	jsonKeyStream      = "stream"
 	jsonKeyMessages    = "messages"
 	jsonKeyContent     = "content"
@@ -137,7 +138,7 @@ func (c *Client) buildClassifyPayload(email Email, prompts []Prompt) map[string]
 	return map[string]any{
 		jsonKeyModel: c.model,
 		jsonKeyMessages: []map[string]string{
-			{jsonKeyRole: "user", jsonKeyContent: body},
+			{jsonKeyRole: roleUser, jsonKeyContent: body},
 		},
 		"think":       false,
 		"format":      "json",
@@ -297,7 +298,7 @@ func (c *Client) streamGenerate(ctx context.Context, description string, ch chan
 				jsonKeyContent: "You write email filter rules for an AI classifier. Output only the rule text. No preamble, no drafts, no self-critique, no quotes, no explanation.",
 			},
 			{
-				jsonKeyRole: "user",
+				jsonKeyRole: roleUser,
 				jsonKeyContent: fmt.Sprintf(
 					"Write a 2-4 sentence classifier instruction for emails matching: %q\n\n"+
 						"The instruction must describe: what the email is about, its purpose/intent, "+
@@ -409,7 +410,7 @@ func (c *Client) ImprovePromptInstructions(ctx context.Context, req ImproveReque
 		}
 		// Append latest user comment
 		messages = append(messages, map[string]string{
-			jsonKeyRole:    "user",
+			jsonKeyRole:    roleUser,
 			jsonKeyContent: req.UserComment,
 		})
 	} else {
@@ -419,7 +420,7 @@ func (c *Client) ImprovePromptInstructions(ctx context.Context, req ImproveReque
 			req.OriginalInstructions,
 			req.EmailSender, req.EmailSubject, req.EmailBody,
 		)
-		messages = append(messages, map[string]string{jsonKeyRole: "user", jsonKeyContent: userMsg})
+		messages = append(messages, map[string]string{jsonKeyRole: roleUser, jsonKeyContent: userMsg})
 	}
 
 	payload := map[string]any{
@@ -443,9 +444,9 @@ func (c *Client) ImprovePromptInstructions(ctx context.Context, req ImproveReque
 	var conv []ChatMessage
 	conv = append(conv, req.PriorConversation...)
 	if len(req.PriorConversation) > 0 {
-		conv = append(conv, ChatMessage{Role: "user", Content: req.UserComment})
+		conv = append(conv, ChatMessage{Role: roleUser, Content: req.UserComment})
 	} else {
-		conv = append(conv, ChatMessage{Role: "user", Content: fmt.Sprintf(
+		conv = append(conv, ChatMessage{Role: roleUser, Content: fmt.Sprintf(
 			"RULE NAME: %s\nTARGET LABEL: %s\nTRIGGER: %s\n\nCURRENT INSTRUCTIONS:\n%s\n\nMISHANDLED EMAIL:\nFrom: %s\nSubject: %s\nBody:\n%s\n\nRewrite the instructions per the system rules.",
 			req.PromptName, req.LabelName, req.TriggerKind,
 			req.OriginalInstructions,
