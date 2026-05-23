@@ -85,7 +85,10 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_KEEP_ALIVE=6m
+      # Set to your poll interval (or just above). OLLAMA_KEEP_ALIVE counts
+      # from when the last LLM query finishes, and the poller uses wall-clock
+      # scheduling, so the model is always still warm when the next tick fires.
+      - OLLAMA_KEEP_ALIVE=60s
     restart: unless-stopped
     networks:
       - internal
@@ -237,7 +240,7 @@ All settings are controlled via environment variables.
                                └─────────────┘
 ```
 
-1. The poller wakes up every N seconds (configurable in the UI).
+1. The poller wakes up on a wall-clock schedule (every N seconds, configurable in the UI). The timer resets at the start of each tick, not after the scan finishes, so the cadence stays stable regardless of scan duration.
 2. For each active Gmail account, it fetches recent emails (limited by `GMAIL_MAX_RESULTS` and `GMAIL_LOOKBACK_HOURS`).
 3. Each email body is truncated to `EMAIL_BODY_TRUNCATION` characters and all active rules are sent to the LLM **in a single call**, which returns a structured per-rule true/false decision.
 4. For each matched rule, the configured action is applied via the Gmail API (label, archive, trash, spam, mark as read). Labels are created in Gmail automatically if they don't exist.
