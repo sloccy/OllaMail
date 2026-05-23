@@ -94,7 +94,7 @@ func (p *Poller) Stop() {
 
 // RunNow triggers a scan and blocks until it completes.
 func (p *Poller) RunNow() {
-	p.runScan()
+	p.runScan(context.Background())
 }
 
 // UpdateInterval changes the polling interval and reschedules the next run.
@@ -171,12 +171,12 @@ func (p *Poller) loop(ctx context.Context) {
 			d = time.Until(p.nextRun)
 			p.mu.Unlock()
 			timer.Reset(d)
-			go p.runScan()
+			go p.runScan(ctx)
 		}
 	}
 }
 
-func (p *Poller) runScan() {
+func (p *Poller) runScan(ctx context.Context) {
 	if !p.scanMu.TryLock() {
 		return // scan already running
 	}
@@ -190,8 +190,6 @@ func (p *Poller) runScan() {
 		p.lastCleanup = now
 	}
 	p.mu.Unlock()
-
-	ctx := context.Background()
 
 	if doCleanup {
 		_ = p.store.TrimLogs(ctx, p.cfg.LogRetention)
