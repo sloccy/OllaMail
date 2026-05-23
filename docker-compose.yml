@@ -8,7 +8,10 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_KEEP_ALIVE=6m
+      # Set to your poll interval (or just above). OLLAMA_KEEP_ALIVE counts
+      # from when the last LLM query finishes, and the poller uses wall-clock
+      # scheduling, so the model is always still warm when the next tick fires.
+      - OLLAMA_KEEP_ALIVE=60s
     restart: unless-stopped
     networks:
       - internal

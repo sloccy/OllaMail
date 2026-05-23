@@ -101,7 +101,7 @@ func (p *Poller) RunNow() {
 func (p *Poller) UpdateInterval(seconds int) {
 	p.mu.Lock()
 	p.interval = time.Duration(seconds) * time.Second
-	p.nextRun = p.lastRun.Add(p.interval)
+	p.nextRun = time.Now().Add(p.interval)
 	p.mu.Unlock()
 	// Signal loop to reset the timer so the new interval takes effect immediately.
 	select {
@@ -160,12 +160,18 @@ func (p *Poller) loop(ctx context.Context) {
 			}
 			timer.Reset(d)
 		case <-timer.C:
-			p.runScan()
 			p.mu.Lock()
-			d = p.interval
-			p.nextRun = time.Now().Add(p.interval)
+			now := time.Now()
+			p.nextRun = p.nextRun.Add(p.interval)
+			if p.nextRun.Before(now) {
+				// Fell behind (e.g. scan ran longer than interval or system was
+				// suspended). Skip missed ticks and resume on the wall clock.
+				p.nextRun = now.Add(p.interval)
+			}
+			d = time.Until(p.nextRun)
 			p.mu.Unlock()
 			timer.Reset(d)
+			go p.runScan()
 		}
 	}
 }
