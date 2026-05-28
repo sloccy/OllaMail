@@ -179,6 +179,7 @@ jobs:
       - name: Create and push manifest list
         working-directory: /tmp/digests
         run: |
+          # shellcheck disable=SC2046  # word splitting is intentional: multiple -t tags and digest refs
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< '${{ steps.meta.outputs.json }}') \
             $(printf '${{ env.IMAGE }}@sha256:%s ' *)
