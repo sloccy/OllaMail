@@ -963,11 +963,16 @@ func (s *server) handleOAuthExchange(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleScan(w http.ResponseWriter, _ *http.Request) {
 	s.store.Log("INFO", "Manual scan triggered")
-	s.poller.RunNow()
-	setHxTrigger(w, map[string]any{
-		triggerShowToast:   map[string]any{toastKeyMessage: "Scan complete", jsonKeyType: "success"},
-		"refreshDashboard": "",
-	})
+	if s.poller.RunNow() {
+		setHxTrigger(w, map[string]any{
+			triggerShowToast:   map[string]any{toastKeyMessage: "Scan complete", jsonKeyType: "success"},
+			"refreshDashboard": "",
+		})
+	} else {
+		setHxTrigger(w, map[string]any{
+			triggerShowToast: map[string]any{toastKeyMessage: "A scan is already running", jsonKeyType: "warning"},
+		})
+	}
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -39,7 +39,9 @@ type Poller struct {
 	scanMu  sync.Mutex    // non-blocking try-lock for scan exclusion
 	resetCh chan struct{} // signals loop to reset the timer after interval change
 
-	cancel context.CancelFunc
+	wg      sync.WaitGroup
+	loopCtx context.Context // set by Start, read by RunNow; guarded by mu
+	cancel  context.CancelFunc
 }
 
 // Config holds the runtime configuration needed by the poller.
@@ -90,20 +92,31 @@ func (p *Poller) Start() {
 	p.mu.Unlock()
 
 	loopCtx, cancel := context.WithCancel(context.Background())
+	p.mu.Lock()
+	p.loopCtx = loopCtx
 	p.cancel = cancel
-	go p.loop(loopCtx)
+	p.mu.Unlock()
+	p.wg.Go(func() { p.loop(loopCtx) })
 }
 
-// Stop signals the poller loop to exit.
+// Stop signals the poller loop to exit and waits for any in-flight scan to finish.
 func (p *Poller) Stop() {
 	if p.cancel != nil {
 		p.cancel()
 	}
+	p.wg.Wait()
 }
 
 // RunNow triggers a scan and blocks until it completes.
-func (p *Poller) RunNow() {
-	p.runScan(context.Background())
+// Returns false if a scan is already running (scan was skipped).
+func (p *Poller) RunNow() bool {
+	ctx := context.Background()
+	p.mu.RLock()
+	if p.loopCtx != nil {
+		ctx = p.loopCtx
+	}
+	p.mu.RUnlock()
+	return p.runScan(ctx)
 }
 
 // UpdateInterval changes the polling interval and reschedules the next run.
@@ -180,14 +193,14 @@ func (p *Poller) loop(ctx context.Context) {
 			d = time.Until(p.nextRun)
 			p.mu.Unlock()
 			timer.Reset(d)
-			go p.runScan(ctx)
+			p.wg.Go(func() { p.runScan(ctx) })
 		}
 	}
 }
 
-func (p *Poller) runScan(ctx context.Context) {
+func (p *Poller) runScan(ctx context.Context) bool {
 	if !p.scanMu.TryLock() {
-		return // scan already running
+		return false // scan already running
 	}
 	defer p.scanMu.Unlock()
 
@@ -209,13 +222,13 @@ func (p *Poller) runScan(ctx context.Context) {
 	accounts, err := p.store.ListAccounts(ctx)
 	if err != nil {
 		slog.Error("list accounts", "err", err)
-		return
+		return true
 	}
 
 	prompts, err := p.store.ListActivePrompts(ctx)
 	if err != nil {
 		slog.Error("list prompts", "err", err)
-		return
+		return true
 	}
 
 	procCfg := processor.ProcessConfig{
@@ -226,6 +239,9 @@ func (p *Poller) runScan(ctx context.Context) {
 	}
 
 	for _, account := range accounts {
+		if ctx.Err() != nil {
+			break
+		}
 		if account.Active == 0 {
 			continue
 		}
@@ -239,4 +255,5 @@ func (p *Poller) runScan(ctx context.Context) {
 			p.cleanup(ctx, p.store, wrapper.Svc, account.ID)
 		}
 	}
+	return true
 }

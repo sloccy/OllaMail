@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // newTestClient returns a Client backed by the given httptest.Server.
@@ -118,11 +119,11 @@ func TestRetryTransport_200OnFirstAttempt(t *testing.T) {
 }
 
 // TestRetryTransport_RetryOn500 verifies that a 500 followed by 200 succeeds.
-// It incurs a ~1s sleep from the retry backoff — acceptable in CI but run last.
 func TestRetryTransport_RetryOn500(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping retry sleep test in -short mode")
-	}
+	old := retryBaseBackoff
+	retryBaseBackoff = time.Millisecond
+	t.Cleanup(func() { retryBaseBackoff = old })
+
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		n := calls.Add(1)

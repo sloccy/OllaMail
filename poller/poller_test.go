@@ -2,9 +2,7 @@ package poller
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -125,38 +123,50 @@ func TestRunNow_NonReentrant(t *testing.T) {
 	store := newTestStore(t)
 	p := newTestPoller(t, store)
 
-	var started, completed atomic.Int32
-	var mu sync.Mutex
-	mu.Lock() // will be unlocked by the slow scan
+	// Need an active account so processAccount is actually invoked.
+	_, err := store.UpsertAccount(context.Background(), db.UpsertAccountParams{
+		Email:           "block@test.com",
+		CredentialsJson: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var callCount atomic.Int32
 
 	p.processAccount = func(_ context.Context, _ *db.Store, _ *llm.Client, _ *gmailpkg.Auth, _ db.Account, _ []db.Prompt, _ processor.ProcessConfig) (*gmailpkg.ServiceWrapper, error) {
+		callCount.Add(1)
+		close(started)  // signal scan #1 is running
+		<-release       // block until released
 		return nil, nil //nolint:nilnil
 	}
 
-	// Use scanMu directly to simulate a long-running scan.
-	p.scanMu.Lock()
-	started.Add(1)
-
-	// RunNow in a goroutine — it should return immediately because the scan lock is held.
+	// Launch scan #1 — will block inside processAccount.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		p.RunNow()
-		completed.Add(1)
 	}()
 
-	// RunNow should return quickly since the lock is held.
-	select {
-	case <-done:
-		// Good — RunNow returned without waiting.
-	case <-time.After(500 * time.Millisecond):
-		// RunNow blocked on the lock — that's the expected non-reentrant behavior.
-		// Unlock and wait.
-		p.scanMu.Unlock()
-		<-done
+	// Wait until scan #1 holds the lock.
+	<-started
+
+	// Scan #2 must return immediately (TryLock fails) and not increment callCount.
+	if p.RunNow() {
+		t.Error("second RunNow: expected false (already running), got true")
+	}
+	if callCount.Load() != 1 {
+		t.Errorf("second RunNow invoked processAccount: callCount = %d, want 1", callCount.Load())
 	}
 
-	_ = started.Load()
+	// Release scan #1 and confirm it finished cleanly.
+	close(release)
+	<-done
+	if callCount.Load() != 1 {
+		t.Errorf("total processAccount calls = %d, want 1", callCount.Load())
+	}
 }
 
 // ============================================================
@@ -329,6 +339,3 @@ func TestActiveZeroMeansFalse(t *testing.T) {
 		t.Errorf("toggled account should be inactive (Active=0), got %d", acc2.Active)
 	}
 }
-
-// suppress unused import warning for sql package (used in testDummyUseSQL).
-var _ = sql.NullInt64{}

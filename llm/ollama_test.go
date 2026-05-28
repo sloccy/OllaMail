@@ -262,7 +262,13 @@ func TestClassifyEmailBatch_HappyPath(t *testing.T) {
 
 func TestClassifyEmailBatch_Empty(t *testing.T) {
 	store := newTestStore(t)
-	c := NewClient("http://localhost:99999", "m", 4096, time.Second)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("unexpected HTTP call: empty prompts should short-circuit before any request")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(srv.URL, "m", 4096, time.Second)
 	res, err := c.ClassifyEmailBatch(t.Context(), store, Email{}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
