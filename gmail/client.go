@@ -25,9 +25,9 @@ const (
 	LabelUnread = "UNREAD"
 	LabelSpam   = "SPAM"
 	LabelTrash  = "TRASH"
-
-	gmailBase = "https://gmail.googleapis.com/gmail/v1/users/me"
 )
+
+var gmailBase = "https://gmail.googleapis.com/gmail/v1/users/me"
 
 // retryTransport wraps an http.RoundTripper with retry logic for 429 and 5xx.
 type retryTransport struct {

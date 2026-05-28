@@ -1,0 +1,86 @@
+name: Govulncheck auto-fix
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Scan and bump called vulns
+        id: bump
+        run: |
+          set -euo pipefail
+          govulncheck -json ./... > scan.json || true
+
+          # Extract called findings: trace[0].function non-null means the code path is reachable.
+          jq -r '
+            select(.finding != null) | .finding
+            | select(.trace != null and (.trace | length) > 0 and .trace[0].function != null)
+            | "\(.trace[0].module) \(.fixed_version // "")"
+          ' scan.json | sort -u > called.txt
+
+          if [ ! -s called.txt ]; then
+            echo "no_called=true" >> "$GITHUB_OUTPUT"
+            echo "No called vulnerabilities found."
+            exit 0
+          fi
+
+          echo "Called vulnerabilities to fix:"
+          cat called.txt
+
+          while IFS=' ' read -r module fixed; do
+            [[ -z "$module" || "$module" == "stdlib" || "$module" == "toolchain" ]] && continue
+            [[ -z "$fixed" ]] && continue
+            go get "${module}@${fixed}" || echo "skip: could not get ${module}@${fixed}"
+          done < called.txt
+
+          go mod tidy
+
+      - name: Verify clean
+        if: steps.bump.outputs.no_called != 'true'
+        run: govulncheck ./...
+
+      - name: Open PR
+        if: steps.bump.outputs.no_called != 'true'
+        uses: peter-evans/create-pull-request@v7
+        id: cpr
+        with:
+          branch: vuln-autofix/${{ github.run_id }}
+          title: 'chore(deps): bump called vulnerable deps'
+          body: |
+            Automated bump of Go modules with **called** vulnerabilities reported by `govulncheck`.
+
+            Only vulnerabilities with a reachable call trace (`trace[0].function != null`) are bumped.
+            Non-called findings and transitive-only vulns are left untouched.
+
+            **One-time setup required (repo owner):** enable auto-merge under
+            `Settings → General → Pull Requests → Allow auto-merge` if not already on.
+          commit-message: 'chore(deps): bump called vulnerable deps'
+          labels: dependencies,security
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr=${{ steps.cpr.outputs.pull-request-number }}
+          # Close and reopen so required status checks trigger (GITHUB_TOKEN limitation).
+          gh pr close "$pr"
+          gh pr reopen "$pr"
+          gh pr merge "$pr" --auto --squash

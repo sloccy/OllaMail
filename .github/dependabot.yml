@@ -1,4 +1,5 @@
 version: 2
+# Note: transitive Go dep security bumps are handled by vuln-autofix.yml — Dependabot does not bump transitives.
 updates:
   - package-ecosystem: gomod
     directory: /
