@@ -23,6 +23,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Lint workflows
+        uses: raven-actions/actionlint@v2
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -180,10 +183,18 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< '${{ steps.meta.outputs.json }}') \
             $(printf '${{ env.IMAGE }}@sha256:%s ' *)
 
-  # Satisfies the "build-and-push" required status check in branch protection.
+  # Single required status check for branch protection. Always runs so it reports a
+  # definitive pass/fail (never the stuck "Expected" state) and aggregates the real jobs.
   build-and-push:
     name: build-and-push
     needs: [lint, build]
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - run: echo "ok"
+      - name: Verify required jobs succeeded
+        run: |
+          echo "lint=${{ needs.lint.result }} build=${{ needs.build.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.build.result }}" != "success" ]; then
+            echo "A required job failed or was cancelled"
+            exit 1
+          fi
