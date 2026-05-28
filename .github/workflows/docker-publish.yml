@@ -179,3 +179,11 @@ jobs:
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< '${{ steps.meta.outputs.json }}') \
             $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+
+  # Satisfies the "build-and-push" required status check in branch protection.
+  build-and-push:
+    name: build-and-push
+    needs: [lint, build]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ok"
