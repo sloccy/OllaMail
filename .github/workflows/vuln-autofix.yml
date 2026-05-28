@@ -58,7 +58,7 @@ jobs:
 
       - name: Open PR
         if: steps.bump.outputs.no_called != 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         id: cpr
         with:
           branch: vuln-autofix/${{ github.run_id }}
