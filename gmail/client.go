@@ -29,6 +29,8 @@ const (
 
 var gmailBase = "https://gmail.googleapis.com/gmail/v1/users/me"
 
+var retryBaseBackoff = time.Second
+
 // retryTransport wraps an http.RoundTripper with retry logic for 429 and 5xx.
 type retryTransport struct {
 	base http.RoundTripper
@@ -37,7 +39,7 @@ type retryTransport struct {
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
-	backoff := time.Second
+	backoff := retryBaseBackoff
 	for attempt := range 3 {
 		if attempt > 0 {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2))) //nolint:gosec // G404: crypto rand unnecessary for jitter
