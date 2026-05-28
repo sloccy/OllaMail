@@ -16,12 +16,19 @@ import (
 
 const cleanupInterval = time.Hour
 
+type processorFn func(ctx context.Context, store *db.Store, ollamaClient *llm.Client, gmailAuth *gmail.Auth, account db.Account, prompts []db.Prompt, cfg processor.ProcessConfig) (*gmail.ServiceWrapper, error)
+
+type cleanupFn func(ctx context.Context, store *db.Store, svc *gmail.Client, accountID int64)
+
 // Poller runs background email scans on a configurable interval.
 type Poller struct {
 	store        *db.Store
 	ollamaClient *llm.Client
 	gmailAuth    *gmail.Auth
 	cfg          *Config
+
+	processAccount processorFn
+	cleanup        cleanupFn
 
 	mu          sync.RWMutex
 	interval    time.Duration
@@ -53,11 +60,13 @@ type Status struct {
 
 func New(store *db.Store, ollamaClient *llm.Client, auth *gmail.Auth, cfg *Config) *Poller {
 	return &Poller{
-		store:        store,
-		ollamaClient: ollamaClient,
-		gmailAuth:    auth,
-		cfg:          cfg,
-		resetCh:      make(chan struct{}, 1),
+		store:          store,
+		ollamaClient:   ollamaClient,
+		gmailAuth:      auth,
+		cfg:            cfg,
+		resetCh:        make(chan struct{}, 1),
+		processAccount: processor.ProcessAccount,
+		cleanup:        retention.Cleanup,
 	}
 }
 
@@ -220,14 +229,14 @@ func (p *Poller) runScan(ctx context.Context) {
 		if account.Active == 0 {
 			continue
 		}
-		wrapper, err := processor.ProcessAccount(ctx, p.store, p.ollamaClient, p.gmailAuth, account, prompts, procCfg)
+		wrapper, err := p.processAccount(ctx, p.store, p.ollamaClient, p.gmailAuth, account, prompts, procCfg)
 		if err != nil {
 			slog.Error("process account", "email", account.Email, "err", err)
 			p.store.Log("ERROR", "Scan failed for "+account.Email+": "+err.Error())
 			continue
 		}
 		if wrapper != nil {
-			retention.Cleanup(ctx, p.store, wrapper.Svc, account.ID)
+			p.cleanup(ctx, p.store, wrapper.Svc, account.ID)
 		}
 	}
 }

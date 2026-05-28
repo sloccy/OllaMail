@@ -67,6 +67,8 @@ linters:
           disabled: true
         - name: package-comments
           disabled: true
+    goconst:
+      ignore-tests: true
     gosec:
       excludes:
         - G120 # request body size limited globally via MaxBytesReader middleware

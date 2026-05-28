@@ -82,8 +82,10 @@ func (a *Auth) ExchangeCode(ctx context.Context, code string) (string, string, e
 	return email, string(credJSON), nil
 }
 
+var userinfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
+
 func fetchEmail(ctx context.Context, client *http.Client) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoURL, nil)
 	if err != nil {
 		return "", err
 	}
