@@ -61,6 +61,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         id: cpr
         with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: vuln-autofix/${{ github.run_id }}
           title: 'chore(deps): bump called vulnerable deps'
           body: |
@@ -79,8 +80,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          pr=${{ steps.cpr.outputs.pull-request-number }}
-          # Close and reopen so required status checks trigger (GITHUB_TOKEN limitation).
-          gh pr close "$pr"
-          gh pr reopen "$pr"
-          gh pr merge "$pr" --auto --squash
+          gh pr merge "${{ steps.cpr.outputs.pull-request-number }}" --auto --squash
