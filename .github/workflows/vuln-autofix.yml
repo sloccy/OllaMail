@@ -54,7 +54,7 @@ jobs:
           # highest fixed Go version instead. GOTOOLCHAIN=auto (the default) makes the
           # subsequent `go mod tidy` / verify download and run that toolchain automatically.
           maxgo=$(awk '$1=="stdlib" || $1=="toolchain" {print $2}' called.txt \
-            | sed -E 's/^(v|go)//' | sort -V | tail -1)
+            | sed -E 's/^(v|go)//' | sort -V | head -1)
           if [ -n "$maxgo" ]; then
             echo "Bumping go directive to ${maxgo} to fix stdlib/toolchain vulns."
             go mod edit -go="${maxgo}"
