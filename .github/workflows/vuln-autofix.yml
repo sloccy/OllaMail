@@ -50,6 +50,16 @@ jobs:
             go get "${module}@${fixed}" || echo "skip: could not get ${module}@${fixed}"
           done < called.txt
 
+          # Stdlib/toolchain vulns can't be `go get`-ed — raise the go directive to the
+          # highest fixed Go version instead. GOTOOLCHAIN=auto (the default) makes the
+          # subsequent `go mod tidy` / verify download and run that toolchain automatically.
+          maxgo=$(awk '$1=="stdlib" || $1=="toolchain" {print $2}' called.txt \
+            | sed -E 's/^(v|go)//' | sort -V | tail -1)
+          if [ -n "$maxgo" ]; then
+            echo "Bumping go directive to ${maxgo} to fix stdlib/toolchain vulns."
+            go mod edit -go="${maxgo}"
+          fi
+
           go mod tidy
 
       - name: Verify clean
@@ -69,6 +79,10 @@ jobs:
 
             Only vulnerabilities with a reachable call trace (`trace[0].function != null`) are bumped.
             Non-called findings and transitive-only vulns are left untouched.
+
+            - Third-party modules: bumped via `go get module@fixed_version`
+            - Standard library / toolchain: the `go` directive in `go.mod` is raised to the
+              highest fixed Go version; `GOTOOLCHAIN=auto` downloads it transparently
 
             **One-time setup required (repo owner):** enable auto-merge under
             `Settings → General → Pull Requests → Allow auto-merge` if not already on.
