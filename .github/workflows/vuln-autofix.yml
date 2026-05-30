@@ -1,4 +1,4 @@
-name: Govulncheck auto-fix
+name: Go vuln auto-fix
 
 on:
   schedule:
