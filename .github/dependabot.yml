@@ -6,27 +6,21 @@ updates:
     schedule:
       interval: daily
     open-pull-requests-limit: 10
-    groups:
-      go-deps:
-        patterns:
-          - "*"
 
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: daily
     open-pull-requests-limit: 10
-    groups:
-      npm-deps:
-        patterns:
-          - "*"
 
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
