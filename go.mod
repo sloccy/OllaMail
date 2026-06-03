@@ -1,6 +1,6 @@
 module github.com/sloccy/ollamail
 
-go 1.25.10
+go 1.25.11
 
 require (
 	golang.org/x/oauth2 v0.36.0
