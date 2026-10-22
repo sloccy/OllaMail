@@ -1,5 +1,10 @@
 FROM golang:1.26-alpine AS build
 
+# The official golang image sets GOTOOLCHAIN=local. The nightly security job can raise
+# the go directive past the image's Go patch release; let the build fetch that toolchain
+# instead of failing until the image catches up.
+ENV GOTOOLCHAIN=auto
+
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
